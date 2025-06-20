@@ -114,6 +114,7 @@ def create_bar_chart(data, x_column, y_column, title=None, orientation='v', colo
 def prepare_demographics(data):
     age_bins = [0, 18, 25, 30, 40, 50, 60, 70, 100]
     age_labels = ['<18', '18-25', '25-30', '30-40', '40-50', '50-60', '60-70', '70+']
+    data = data.copy()
     data['age_group'] = pd.cut(data['age'], bins=age_bins, labels=age_labels)
 
     age_group_counts = data['age_group'].value_counts().reset_index()
@@ -362,7 +363,7 @@ def visualize_patient_demographics(tab, data):
 
 
 def visualize_medicines(tab, data):
-    data = data[data['type'].str.lower() == 'medicine']
+    data = data[data['type'].str.lower() == 'medicine'].copy()
     data['value'] = data['value'].str.strip().str.upper()
     data = data.dropna(subset=['value'])
 
@@ -492,7 +493,8 @@ def visualize_pharma_analytics(tab, filtered_medical_data):
 
 
 def visualize_observations(tab, data):
-    data = data[data['type'].str.lower() == 'observation']
+    data = data[data['type'].str.lower() == 'observation'].copy()
+
     data['value'] = data['value'].str.strip().str.upper()
     data = data.dropna(subset=['value'])
     data = data[~data.value.isna()]
@@ -535,7 +537,7 @@ def visualize_observations(tab, data):
 
 
 def visualize_diagnostics(tab, data):
-    data = data[data['type'].str.lower() == 'diagnostic']
+    data = data[data['type'].str.lower() == 'diagnostic'].copy()
     data['value'] = data['value'].str.strip().str.upper()
     data = data.dropna(subset=['value'])
     data = data[~data.value.isna()]
