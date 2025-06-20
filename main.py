@@ -900,7 +900,8 @@ def visualize_vitals(tab, data):
         st.subheader("Vital Sign Analysis")
 
         # Get unique vitals
-        available_vitals = sorted(data['vital_type'].dropna().unique())
+        available_vitals = ["Blood pressure (BP)","Pulse","Weight"]
+        # available_vitals = sorted(data['vital_type'].dropna().unique())
 
         # User selects which vital to visualize
         selected_vital = st.selectbox("Select a Vital to View", available_vitals)
