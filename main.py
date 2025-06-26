@@ -1,6 +1,7 @@
 import logging
 import sys
 import streamlit as st
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     stream=sys.stdout,
@@ -15,8 +16,10 @@ import pandas as pd
 import plotly.express as px
 from streamlit import session_state as state
 
+
 def log_time(func):
     """Decorator to log start, end, and duration of a function call."""
+
     def wrapper(*args, **kwargs):
         logger.info(f"⏱️  {func.__name__} started")
         start = time.time()
@@ -24,7 +27,9 @@ def log_time(func):
         duration = time.time() - start
         logger.info(f"⏱️  {func.__name__} finished in {duration:.2f}s")
         return result
+
     return wrapper
+
 
 @log_time
 @st.cache_data
@@ -41,14 +46,16 @@ def load_data(file_path):
         raise ValueError("Unsupported file format. Please provide a CSV, Excel, or JSON file.")
     # The file_path parameter can be a URL. No additional code needed.
 
-@log_time
+
 def json_to_dataframe(file_path):
     with open(file_path, 'r') as file:
         json_data = json.load(file)
     df = pd.json_normalize(json_data)
     return df
 
+
 @log_time
+@st.cache_data
 def clean_medical_data(data):
     data['average_mrp'] = data[['min_mrp', 'max_mrp']].mean(axis=1).round(2)
     data['gender'] = data['gender'].replace("", "Unknown")
@@ -110,17 +117,17 @@ def display_sidebar_totals(filtered_data):
     st.sidebar.metric("Total Patients", total_patients)
     st.sidebar.metric("Total Rx", total_rx)
 
-@log_time
-def aggregate_geo_data(data, group_by_column, count_column):
-    aggregated_data = (
-        data
-        .groupby(group_by_column, observed=True)[count_column]
-        .nunique()
-        .reset_index()
-    )
-    aggregated_data.columns = [group_by_column, 'count']
-    aggregated_data = aggregated_data.sort_values(by='count', ascending=False)
-    return aggregated_data
+
+# def aggregate_geo_data(data, group_by_column, count_column):
+#     aggregated_data = (
+#         data
+#         .groupby(group_by_column, observed=True)[count_column]
+#         .nunique()
+#         .reset_index()
+#     )
+#     aggregated_data.columns = [group_by_column, 'count']
+#     aggregated_data = aggregated_data.sort_values(by='count', ascending=False)
+#     return aggregated_data
 
 @log_time
 def create_bar_chart(data, x_column, y_column, title=None, orientation='v', color=None, text=None):
