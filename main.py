@@ -4,11 +4,24 @@ import time
 from datetime import datetime
 import pandas as pd
 import plotly.express as px
-import requests
 import streamlit as st
 from streamlit import session_state as state
+import logging
 
+logger = logging.getLogger(__name__)
 
+def log_time(func):
+    """Decorator to log start, end, and duration of a function call."""
+    def wrapper(*args, **kwargs):
+        logger.info(f"⏱️  {func.__name__} started")
+        start = time.time()
+        result = func(*args, **kwargs)
+        duration = time.time() - start
+        logger.info(f"⏱️  {func.__name__} finished in {duration:.2f}s")
+        return result
+    return wrapper
+
+@log_time
 @st.cache_data
 def load_data(file_path):
     file_extension = os.path.splitext(file_path)[1].lower()
@@ -23,14 +36,14 @@ def load_data(file_path):
         raise ValueError("Unsupported file format. Please provide a CSV, Excel, or JSON file.")
     # The file_path parameter can be a URL. No additional code needed.
 
-
+@log_time
 def json_to_dataframe(file_path):
     with open(file_path, 'r') as file:
         json_data = json.load(file)
     df = pd.json_normalize(json_data)
     return df
 
-
+@log_time
 def clean_medical_data(data):
     data['average_mrp'] = data[['min_mrp', 'max_mrp']].mean(axis=1).round(2)
     data['gender'] = data['gender'].replace("", "Unknown")
@@ -44,7 +57,7 @@ def clean_medical_data(data):
         data['value'] = data['value'].str.lower().apply(lambda x: key if value in str(x) else x)
     return data
 
-
+@log_time
 def apply_filters(data, state_filter=None, city_filter=None, pincode_filter=None, speciality_filter=None,
                   client_filter=None, project_filter=None):
     """Filters medical data based on multiple criteria including state, city, pincode, speciality, client, and project."""
@@ -67,7 +80,7 @@ def apply_filters(data, state_filter=None, city_filter=None, pincode_filter=None
 
     return filtered_data
 
-
+@log_time
 def filter_by_date_range(data, start_date, end_date):
     # Ensure 'start_time' is in datetime format
     data['start_time'] = pd.to_datetime(data['start_time'], errors='coerce')  # Handle invalid dates
@@ -79,7 +92,7 @@ def filter_by_date_range(data, start_date, end_date):
     # Filter the data within the specified date range
     return data[(data['start_time'] >= start_date) & (data['start_time'] <= end_date)]
 
-
+@log_time
 def display_sidebar_totals(filtered_data):
     st.sidebar.markdown("### Totals in Analytics")
     # total_doctors = filtered_data['doctor_id'].nunique()
@@ -92,14 +105,14 @@ def display_sidebar_totals(filtered_data):
     st.sidebar.metric("Total Patients", total_patients)
     st.sidebar.metric("Total Rx", total_rx)
 
-
+@log_time
 def aggregate_geo_data(data, group_by_column, count_column):
     aggregated_data = data.groupby(group_by_column)[count_column].nunique().reset_index()
     aggregated_data.columns = [group_by_column, 'count']
     aggregated_data = aggregated_data.sort_values(by='count', ascending=False)
     return aggregated_data
 
-
+@log_time
 def create_bar_chart(data, x_column, y_column, title=None, orientation='v', color=None, text=None):
     return px.bar(
         data,
@@ -113,7 +126,7 @@ def create_bar_chart(data, x_column, y_column, title=None, orientation='v', colo
         text=text,
     )
 
-
+@log_time
 def prepare_demographics(data):
     age_bins = [0, 18, 25, 30, 40, 50, 60, 70, 100]
     age_labels = ['<18', '18-25', '25-30', '30-40', '40-50', '50-60', '60-70', '70+']
@@ -128,7 +141,7 @@ def prepare_demographics(data):
     return age_group_counts.sort_values(by='count', ascending=False), gender_counts.sort_values(by='count',
                                                                                                 ascending=False)
 
-
+@log_time
 def create_pie_chart(data, names_column, values_column, title=None, color_map=None):
     # Define color mapping for FEMALE and MALE
     return px.pie(
@@ -140,7 +153,7 @@ def create_pie_chart(data, names_column, values_column, title=None, color_map=No
         color_discrete_map=color_map  # Apply the color mapping
     )
 
-
+@log_time
 def get_top_items(data, item_type):
     top_items = (
         data[data['type'] == item_type]['value']
@@ -152,7 +165,7 @@ def get_top_items(data, item_type):
     top_items.columns = [item_type, 'count']
     return top_items
 
-
+@log_time
 def analyze_observation_by_gender(data):
     observation_gender = (
         data[data['type'] == 'Observation']
@@ -168,7 +181,7 @@ def analyze_observation_by_gender(data):
 
     return observation_gender
 
-
+@log_time
 def analyze_diagnostics_by_gender(data):
     diagnostics_gender = (
         data[data['type'] == 'Diagnostic']
@@ -184,7 +197,7 @@ def analyze_diagnostics_by_gender(data):
 
     return diagnostics_gender
 
-
+@log_time
 def analyze_pharma_data(filtered_data):
     """
     Analyze pharma data to extract top manufacturers and primary uses.
@@ -232,7 +245,7 @@ def analyze_pharma_data(filtered_data):
 
     return top_manufacturers, top_primary_uses
 
-
+@log_time
 def visualize_data_types(tab, data):
     with tab:
         with st.expander("Distribution of Data Types within Rx"):
@@ -258,7 +271,7 @@ def visualize_data_types(tab, data):
                 total = speciality_counts['Count'].sum()
                 st.metric("Total", total)
 
-
+@log_time
 def preprocess_column(data, column_name):
     """
     Preprocess a column to handle comma- and slash-separated values and ensure each value is treated as distinct.
@@ -271,7 +284,7 @@ def preprocess_column(data, column_name):
         ).explode(column_name)
     return data
 
-
+@log_time
 def visualize_geographical_distribution(tab, data):
     with tab:
         # Preprocess 'state_name' and 'city' columns to handle comma-separated values
@@ -338,7 +351,7 @@ def visualize_geographical_distribution(tab, data):
                 total = doctor_city_counts['count'].sum()
                 st.metric("Total", total)
 
-
+@log_time
 def visualize_patient_demographics(tab, data):
     with tab:
         data = data.drop_duplicates(subset=['id'])
@@ -364,7 +377,7 @@ def visualize_patient_demographics(tab, data):
                 total = gender_counts['count'].sum()
                 st.metric("Total", total)
 
-
+@log_time
 def visualize_medicines(tab, data):
     data = data[data['type'].str.lower() == 'medicine'].copy()
     data['value'] = data['value'].str.strip().str.upper()
@@ -429,7 +442,7 @@ def visualize_medicines(tab, data):
                 total = top_medicines['count'].sum()
                 st.metric("Total", total)
 
-
+@log_time
 def visualize_pharma_analytics(tab, filtered_medical_data):
     with tab:
         top_15_manufacturers, top_15_primary_uses = analyze_pharma_data(filtered_medical_data)
@@ -494,7 +507,7 @@ def visualize_pharma_analytics(tab, filtered_medical_data):
         #     else:
         #         st.warning("No data available for Manufacturers by Primary Use.")
 
-
+@log_time
 def visualize_observations(tab, data):
     data = data[data['type'].str.lower() == 'observation'].copy()
 
@@ -538,7 +551,7 @@ def visualize_observations(tab, data):
             with col2:
                 st.dataframe(observations_pivot)
 
-
+@log_time
 def visualize_diagnostics(tab, data):
     data = data[data['type'].str.lower() == 'diagnostic'].copy()
     data['value'] = data['value'].str.strip().str.upper()
@@ -588,7 +601,7 @@ def visualize_diagnostics(tab, data):
             with col2:
                 st.dataframe(diagnostics_pivot, key="diagnostics_by_gender_table")
 
-
+@log_time
 def visualize_manufacturer_medicines(tab, data):
     with tab:
         st.subheader("Medicines by Manufacturer")
@@ -643,7 +656,7 @@ def visualize_manufacturer_medicines(tab, data):
         else:
             st.warning("No manufacturer data available.")
 
-
+@log_time
 def manufacturer_comparison_tab(tab, data):
     with tab:
         st.subheader("Manufacturer Comparison")
@@ -758,7 +771,7 @@ def manufacturer_comparison_tab(tab, data):
                 else:
                     st.write("No data available for this primary use.")
 
-
+@log_time
 def visualize_market_share_primary_use(tab, data):
     with tab:
         st.subheader("Market Share Comparison by Manufacturers for a Primary Use")
@@ -817,7 +830,7 @@ def visualize_market_share_primary_use(tab, data):
         else:
             st.warning("No data available for the selected primary uses.")
 
-
+@log_time
 def visualize_value_comparison(tab, data):
     """
     Creates a tab for value-based comparison of manufacturers.
@@ -894,13 +907,13 @@ def visualize_value_comparison(tab, data):
                 Patient_Count_Percentage=lambda df: (df['Patient_Count'] / df['Patient_Count'].sum() * 100).round(2))
         )
 
-
+@log_time
 def visualize_vitals(tab, data):
     with tab:
         st.subheader("Vital Sign Analysis")
 
         # Get unique vitals
-        available_vitals = ["Blood pressure (BP)","Pulse","Weight"]
+        available_vitals = ["Blood pressure (BP)", "Pulse", "Weight"]
         # available_vitals = sorted(data['vital_type'].dropna().unique())
 
         # User selects which vital to visualize
@@ -1288,7 +1301,7 @@ def visualize_vitals(tab, data):
         else:
             st.warning(f"{selected_vital} sparse data")
 
-
+@log_time
 def get_state_filter(medical_data):
     # Split and normalize state_name values if they are combined
     medical_data['state_name'] = medical_data['state_name'].fillna("").astype(str)
@@ -1302,7 +1315,7 @@ def get_state_filter(medical_data):
         key="state_filter"
     )
 
-
+@log_time
 def get_city_filter(medical_data, state_filter):
     # Filter data for the selected states
     filtered_data = medical_data.copy()
@@ -1323,7 +1336,7 @@ def get_city_filter(medical_data, state_filter):
         key="city_filter"
     )
 
-
+@log_time
 def get_pincode_filter(medical_data, state_filter, city_filter):
     # Filter data for the selected states and cities
     filtered_data = medical_data.copy()
@@ -1348,7 +1361,7 @@ def get_pincode_filter(medical_data, state_filter, city_filter):
         key="pincode_filter"
     )
 
-
+@log_time
 def get_speciality_filter(medical_data, pincode_filter):
     filtered_speciality_data = medical_data.copy()
     if pincode_filter:
@@ -1365,14 +1378,14 @@ def get_speciality_filter(medical_data, pincode_filter):
         key="speciality_filter"
     )
 
-
+@log_time
 def get_client_filter(data):
     """Extracts unique client names and provides a multi-select filter in Streamlit."""
     unique_clients = sorted(data['client'].dropna().unique())  # Get unique non-null clients
     selected_clients = st.sidebar.multiselect("Select Client(s)", unique_clients)
     return selected_clients
 
-
+@log_time
 def get_project_filter(data, client_filter):
     """Extracts unique project names and provides a multi-select filter in Streamlit."""
     if client_filter:
