@@ -69,6 +69,7 @@ def clean_medical_data(data):
         data['value'] = data['value'].str.lower().apply(lambda x: key if value in str(x) else x)
     return data
 
+
 @log_time
 def apply_filters(data, state_filter=None, city_filter=None, pincode_filter=None, speciality_filter=None,
                   client_filter=None, project_filter=None):
@@ -92,6 +93,7 @@ def apply_filters(data, state_filter=None, city_filter=None, pincode_filter=None
 
     return filtered_data
 
+
 @log_time
 def filter_by_date_range(data, start_date, end_date):
     # Ensure 'start_time' is in datetime format
@@ -103,6 +105,7 @@ def filter_by_date_range(data, start_date, end_date):
 
     # Filter the data within the specified date range
     return data[(data['start_time'] >= start_date) & (data['start_time'] <= end_date)]
+
 
 @log_time
 def display_sidebar_totals(filtered_data):
@@ -118,16 +121,16 @@ def display_sidebar_totals(filtered_data):
     st.sidebar.metric("Total Rx", total_rx)
 
 
-# def aggregate_geo_data(data, group_by_column, count_column):
-#     aggregated_data = (
-#         data
-#         .groupby(group_by_column, observed=True)[count_column]
-#         .nunique()
-#         .reset_index()
-#     )
-#     aggregated_data.columns = [group_by_column, 'count']
-#     aggregated_data = aggregated_data.sort_values(by='count', ascending=False)
-#     return aggregated_data
+def aggregate_geo_data(data, group_by_column, count_column):
+    aggregated_data = (
+        data
+        .groupby(group_by_column, observed=True)[count_column]
+        .nunique()
+        .reset_index()
+    )
+    aggregated_data.columns = [group_by_column, 'count']
+    aggregated_data = aggregated_data.sort_values(by='count', ascending=False)
+    return aggregated_data
 
 @log_time
 def create_bar_chart(data, x_column, y_column, title=None, orientation='v', color=None, text=None):
@@ -189,7 +192,7 @@ def analyze_observation_by_gender(data):
         .dropna(subset=['value', 'gender'])
         .assign(value=lambda df: df['value'].str.upper())
         .assign(gender=lambda df: df['gender'].str.upper())
-        .groupby(['value', 'gender'],observed=True)
+        .groupby(['value', 'gender'], observed=True)
         .size()
         .reset_index(name='count')
     )
@@ -301,72 +304,137 @@ def preprocess_column(data, column_name):
         ).explode(column_name)
     return data
 
+
+#
+# def visualize_geographical_distribution(tab, data):
+#     with tab:
+#         # Preprocess 'state_name' and 'city' columns to handle comma-separated values
+#         data = preprocess_column(data, 'state_name')
+#         data = preprocess_column(data, 'city')
+#
+#         with st.expander("Patient Distribution by State"):
+#             patient_state_counts = aggregate_geo_data(data, 'state_name', 'id')
+#             col1, col2 = st.columns([3, 1])
+#             with col1:
+#                 st.plotly_chart(
+#                     create_bar_chart(patient_state_counts.head(15), 'count', 'state_name', orientation='h',
+#                                      text='count', color='count'),
+#                     use_container_width=True,
+#                     key="patient_state_chart"
+#                 )
+#             with col2:
+#                 st.dataframe(patient_state_counts.reset_index(drop=True), key="patient_state_table")
+#                 total = patient_state_counts['count'].sum()
+#                 st.metric("Total", total)
+#
+#         with st.expander("Patient Distribution by City"):
+#             patient_city_counts = aggregate_geo_data(data, 'city', 'id')
+#             col3, col4 = st.columns([3, 1])
+#             with col3:
+#                 st.plotly_chart(
+#                     create_bar_chart(patient_city_counts.head(25), 'count', 'city', orientation='h', text='count',
+#                                      color='count'),
+#                     use_container_width=True,
+#                     key="patient_city_chart"
+#                 )
+#             with col4:
+#                 st.dataframe(patient_city_counts.reset_index(drop=True), key="patient_city_table")
+#                 total = patient_city_counts['count'].sum()
+#                 st.metric("Total", total)
+#
+#         with st.expander("Doctor Distribution by State"):
+#             doctor_state_counts = aggregate_geo_data(data, 'state_name', 'doctor_id')
+#             col5, col6 = st.columns([3, 1])
+#             with col5:
+#                 st.plotly_chart(
+#                     create_bar_chart(doctor_state_counts.head(15), 'count', 'state_name', orientation='h', text='count',
+#                                      color='count'),
+#                     use_container_width=True,
+#                     key="doctor_state_chart"
+#                 )
+#             with col6:
+#                 st.dataframe(doctor_state_counts.reset_index(drop=True), key="doctor_state_table")
+#                 total = doctor_state_counts['count'].sum()
+#                 st.metric("Total", total)
+#
+#         with st.expander("Doctor Distribution by City"):
+#             doctor_city_counts = aggregate_geo_data(data, 'city', 'doctor_id')
+#             col7, col8 = st.columns([3, 1])
+#             with col7:
+#                 st.plotly_chart(
+#                     create_bar_chart(doctor_city_counts.head(25), 'count', 'city', orientation='h', text='count',
+#                                      color='count'),
+#                     use_container_width=True,
+#                     key="doctor_city_chart"
+#                 )
+#             with col8:
+#                 st.dataframe(doctor_city_counts.reset_index(drop=True), key="doctor_city_table")
+#                 total = doctor_city_counts['count'].sum()
+#                 st.metric("Total", total)
 @log_time
-def visualize_geographical_distribution(tab, data):
+@st.cache_data
+def _explode_geo(df: pd.DataFrame, col: str) -> pd.DataFrame:
+    """
+    Cacheable helper: explode a comma-/slash-separated column into individual rows.
+    Returns a DataFrame with columns ['id','doctor_id',col] for non-empty values.
+    """
+    tmp = df[['id', 'doctor_id', col]].copy()
+    tmp[col] = tmp[col].fillna('').astype(str)
+    # split into multiple columns, then stack/explode
+    splits = tmp[col].str.split(r'[,/]', expand=True)
+    splits.columns = [f"{col}_{i}" for i in range(splits.shape[1])]
+    tmp = pd.concat([tmp.drop(columns=[col]), splits], axis=1)
+    tmp = tmp.melt(id_vars=['id', 'doctor_id'], value_name=col, var_name='_').drop(columns=['_'])
+    tmp[col] = tmp[col].str.strip()
+    return tmp[tmp[col] != '']
+
+@log_time
+def visualize_geographical_distribution(tab, data: pd.DataFrame):
     with tab:
-        # Preprocess 'state_name' and 'city' columns to handle comma-separated values
-        data = preprocess_column(data, 'state_name')
-        data = preprocess_column(data, 'city')
+        st.subheader("Geographical Distribution")
 
-        with st.expander("Patient Distribution by State"):
-            patient_state_counts = aggregate_geo_data(data, 'state_name', 'id')
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.plotly_chart(
-                    create_bar_chart(patient_state_counts.head(15), 'count', 'state_name', orientation='h',
-                                     text='count', color='count'),
-                    use_container_width=True,
-                    key="patient_state_chart"
-                )
-            with col2:
-                st.dataframe(patient_state_counts.reset_index(drop=True), key="patient_state_table")
-                total = patient_state_counts['count'].sum()
-                st.metric("Total", total)
+        # Explode once per column
+        state_df = _explode_geo(data, 'state_name')
+        city_df = _explode_geo(data, 'city')
 
-        with st.expander("Patient Distribution by City"):
-            patient_city_counts = aggregate_geo_data(data, 'city', 'id')
-            col3, col4 = st.columns([3, 1])
-            with col3:
-                st.plotly_chart(
-                    create_bar_chart(patient_city_counts.head(25), 'count', 'city', orientation='h', text='count',
-                                     color='count'),
-                    use_container_width=True,
-                    key="patient_city_chart"
-                )
-            with col4:
-                st.dataframe(patient_city_counts.reset_index(drop=True), key="patient_city_table")
-                total = patient_city_counts['count'].sum()
-                st.metric("Total", total)
+        # Aggregate counts
+        def agg_counts(df: pd.DataFrame, group_col: str, id_col: str) -> pd.DataFrame:
+            return (
+                df.groupby(group_col)[id_col]
+                .nunique()
+                .reset_index(name='count')
+                .sort_values('count', ascending=False)
+            )
 
-        with st.expander("Doctor Distribution by State"):
-            doctor_state_counts = aggregate_geo_data(data, 'state_name', 'doctor_id')
-            col5, col6 = st.columns([3, 1])
-            with col5:
-                st.plotly_chart(
-                    create_bar_chart(doctor_state_counts.head(15), 'count', 'state_name', orientation='h', text='count',
-                                     color='count'),
-                    use_container_width=True,
-                    key="doctor_state_chart"
-                )
-            with col6:
-                st.dataframe(doctor_state_counts.reset_index(drop=True), key="doctor_state_table")
-                total = doctor_state_counts['count'].sum()
-                st.metric("Total", total)
+        patient_state = agg_counts(state_df, 'state_name', 'id')
+        doctor_state = agg_counts(state_df, 'state_name', 'doctor_id')
+        patient_city = agg_counts(city_df, 'city', 'id')
+        doctor_city = agg_counts(city_df, 'city', 'doctor_id')
 
-        with st.expander("Doctor Distribution by City"):
-            doctor_city_counts = aggregate_geo_data(data, 'city', 'doctor_id')
-            col7, col8 = st.columns([3, 1])
-            with col7:
-                st.plotly_chart(
-                    create_bar_chart(doctor_city_counts.head(25), 'count', 'city', orientation='h', text='count',
-                                     color='count'),
-                    use_container_width=True,
-                    key="doctor_city_chart"
-                )
-            with col8:
-                st.dataframe(doctor_city_counts.reset_index(drop=True), key="doctor_city_table")
-                total = doctor_city_counts['count'].sum()
-                st.metric("Total", total)
+        panels = [
+            ("Patient Distribution by State", patient_state, 15, "patient_state"),
+            ("Patient Distribution by City", patient_city, 25, "patient_city"),
+            ("Doctor Distribution by State", doctor_state, 15, "doctor_state"),
+            ("Doctor Distribution by City", doctor_city, 25, "doctor_city"),
+        ]
+
+        for title, df_counts, limit, key in panels:
+            with st.expander(title):
+                c1, c2 = st.columns([3, 1])
+                with c1:
+                    fig = px.bar(
+                        df_counts.head(limit),
+                        x='count',
+                        y=df_counts.columns[0],
+                        orientation='h',
+                        title=title,
+                        text='count',
+                        color='count'
+                    )
+                    st.plotly_chart(fig, use_container_width=True, key=f"{key}_chart")
+                with c2:
+                    st.dataframe(df_counts.reset_index(drop=True), key=f"{key}_table")
+                    st.metric("Total", df_counts['count'].sum())
 
 @log_time
 def visualize_patient_demographics(tab, data):
@@ -394,7 +462,8 @@ def visualize_patient_demographics(tab, data):
                 total = gender_counts['count'].sum()
                 st.metric("Total", total)
 
-# @log_time
+
+#
 # def visualize_medicines(tab, data):
 #     data = data[data['type'].str.lower() == 'medicine'].copy()
 #     data['value'] = data['value'].str.strip().str.upper()
@@ -458,6 +527,7 @@ def visualize_patient_demographics(tab, data):
 #                 st.dataframe(top_medicines.reset_index(drop=True))
 #                 total = top_medicines['count'].sum()
 #                 st.metric("Total", total)
+@log_time
 @st.cache_data
 def _explode_primary_uses(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -535,7 +605,6 @@ def visualize_medicines(tab, data: pd.DataFrame):
                 with c2:
                     st.dataframe(counts)
                     st.metric("Total", counts['count'].sum())
-
 
 @log_time
 def visualize_pharma_analytics(tab, filtered_medical_data):
@@ -867,63 +936,106 @@ def manufacturer_comparison_tab(tab, data):
                     st.write("No data available for this primary use.")
 
 @log_time
-def visualize_market_share_primary_use(tab, data):
+@st.cache_data
+def _explode_primary_use(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Cache and vectorize splitting/exploding of primary_use into uppercase, stripped entries.
+    Returns DataFrame with columns ['manufacturers','exploded_primary_use','value'].
+    """
+    df = data[['manufacturers', 'primary_use', 'value']].dropna(subset=['primary_use'])
+    # split, explode, clean
+    df = df.assign(primary_use=df['primary_use'].str.split("|"))
+    df = df.explode('primary_use')
+    df['primary_use'] = df['primary_use'].str.strip().str.upper()
+    return df[df['primary_use'] != ""].rename(columns={'primary_use': 'exploded_primary_use'})
+
+@log_time
+def visualize_market_share_primary_use(tab, data: pd.DataFrame):
     with tab:
         st.subheader("Market Share Comparison by Manufacturers for a Primary Use")
 
-        # Explode the primary_use column into multiple rows
-        exploded_data = data.copy()
-        exploded_data = exploded_data.dropna(subset=['primary_use'])
-        exploded_data = exploded_data.assign(
-            exploded_primary_use=exploded_data['primary_use'].str.split('|')
-        ).explode('exploded_primary_use')
-        exploded_data['exploded_primary_use'] = exploded_data['exploded_primary_use'].str.strip().str.upper()
-
-        # Get unique primary uses for selection and remove blanks
-        unique_primary_uses = exploded_data['exploded_primary_use']
-        unique_primary_uses = unique_primary_uses[unique_primary_uses != ""].unique()
-
-        selected_primary_uses = st.multiselect("Select Primary Uses", sorted(unique_primary_uses))
-
-        if not selected_primary_uses:
+        # use cached exploded DataFrame
+        exploded = _explode_primary_use(data)
+        uses = sorted(exploded['exploded_primary_use'].unique())
+        selected = st.multiselect("Select Primary Uses", uses)
+        if not selected:
             st.info("Select at least one primary use to view the market share comparison.")
             return
 
-        # Filter data for the selected primary uses
-        filtered_data = exploded_data[exploded_data['exploded_primary_use'].isin(selected_primary_uses)]
-
-        # Calculate the market share of each manufacturer
-        manufacturer_market_share = (
-            filtered_data.groupby('manufacturers')
+        # filter and group in one pass
+        filtered = exploded[exploded['exploded_primary_use'].isin(selected)]
+        market = (
+            filtered
+            .groupby('manufacturers', observed=True)
             .agg(Count=('value', 'count'))
             .reset_index()
         )
-        manufacturer_market_share['Share%'] = (
-                manufacturer_market_share['Count'] / manufacturer_market_share['Count'].sum() * 100
-        ).round(2)
+        total_count = market['Count'].sum()
+        market['Share%'] = (market['Count'] / total_count * 100).round(2)
+        market = market.sort_values('Share%', ascending=False).reset_index(drop=True)
 
-        # Sort and prepare data for the pie chart
-        manufacturer_market_share = manufacturer_market_share.sort_values(
-            by='Share%', ascending=False
-        ).reset_index(drop=True)
-
-        st.subheader(f"Primary Uses: {', '.join(selected_primary_uses)}")
-        if not manufacturer_market_share.empty:
-            fig = px.pie(
-                manufacturer_market_share.head(20),
-                names='manufacturers',
-                values='Share%',
-                hole=0.4, hover_data=['Count'],
-            )
-            col1, col2 = st.columns([60, 40])
-            with col1:
-                st.plotly_chart(fig, use_container_width=True)
-            with col2:
-                st.dataframe(manufacturer_market_share)
-                total = manufacturer_market_share['Count'].sum()
-                st.metric("Total", total)
-        else:
+        st.subheader(f"Primary Uses: {', '.join(selected)}")
+        if market.empty:
             st.warning("No data available for the selected primary uses.")
+            return
+
+        fig = px.pie(
+            market.head(20),
+            names='manufacturers',
+            values='Share%',
+            hole=0.4,
+            hover_data=['Count'],
+        )
+        c1, c2 = st.columns([60, 40])
+        with c1:
+            st.plotly_chart(fig, use_container_width=True)
+        with c2:
+            st.dataframe(market)
+            st.metric("Total", total_count)
+
+
+# def visualize_market_share_primary_use(tab, data: pd.DataFrame):
+#     with tab:
+#         st.subheader("Market Share Comparison by Manufacturers for a Primary Use")
+#
+#         # use cached exploded DataFrame
+#         exploded = _explode_primary_use(data)
+#         uses = sorted(exploded['exploded_primary_use'].unique())
+#         selected = st.multiselect("Select Primary Uses", uses)
+#         if not selected:
+#             st.info("Select at least one primary use to view the market share comparison.")
+#             return
+#
+#         # filter and group in one pass
+#         filtered = exploded[exploded['exploded_primary_use'].isin(selected)]
+#         market = (
+#             filtered
+#             .groupby('manufacturers', observed=True)
+#             .agg(Count=('value','count'))
+#             .reset_index()
+#         )
+#         total_count = market['Count'].sum()
+#         market['Share%'] = (market['Count'] / total_count * 100).round(2)
+#         market = market.sort_values('Share%', ascending=False).reset_index(drop=True)
+#
+#         st.subheader(f"Primary Uses: {', '.join(selected)}")
+#         if market.empty:
+#             st.warning("No data available for the selected primary uses.")
+#             return
+#
+#         fig = px.pie(
+#             market.head(20),
+#             names='manufacturers',
+#             values='Share%',
+#             hole=0.4,
+#             hover_data=['Count'],
+#         )
+#         c1, c2 = st.columns([60,40])
+#         with c1:
+#             st.plotly_chart(fig, use_container_width=True)
+#         with c2:
+#             st.dataframe(market)
+#             st.metric("Total", total_count)
 
 @log_time
 def visualize_value_comparison(tab, data):
@@ -1136,7 +1248,7 @@ def visualize_vitals(tab, data):
 
             with st.expander("Blood Pressure Distribution by Age Groups"):
                 # Add age-wise summary
-                age_summary = vital_data.groupby('age_group',observed=True).agg({
+                age_summary = vital_data.groupby('age_group', observed=True).agg({
                     'systolic': ['count', 'mean', 'median', 'std', 'min', 'max'],
                     'diastolic': ['count', 'mean', 'median', 'std', 'min', 'max']
                 }).round(1)
@@ -1395,19 +1507,20 @@ def visualize_vitals(tab, data):
 
         else:
             st.warning(f"{selected_vital} sparse data")
+
 @log_time
 @st.cache_data
 def get_unique_states(state_series: pd.Series) -> list[str]:
     # fill NaN, ensure string, split into columns, stack into one Series, strip & drop blanks
     df = (
         state_series
-        .fillna("")              # no NaNs
-        .astype(str)             # ensure str
+        .fillna("")  # no NaNs
+        .astype(str)  # ensure str
         .str.split(r'[,/]', expand=True)
-        .stack()                 # one big Series
-        .str.strip()             # remove whitespace
+        .stack()  # one big Series
+        .str.strip()  # remove whitespace
     )
-    df = df[df != ""]            # drop empty strings
+    df = df[df != ""]  # drop empty strings
     return sorted(df.unique().tolist())
 
 @log_time
@@ -1499,7 +1612,7 @@ def get_project_filter(data, client_filter):
     selected_projects = st.sidebar.multiselect("Select Project(s)", unique_projects)
     return selected_projects
 
-
+@log_time
 def main():
     st.set_page_config(layout="wide", page_title="Dashboard")
 
@@ -1509,7 +1622,7 @@ def main():
     with col2:
         logo_path = 'logo.png'
 
-    path = 'data/demo_half_data.csv'
+    path = 'data/demo_data.csv'
     data = load_data(path)
     cleaned_data = clean_medical_data(data)
     st.sidebar.title("Rx Analytics Filters")
