@@ -110,12 +110,12 @@ def filter_by_date_range(data, start_date, end_date):
 @log_time
 def display_sidebar_totals(filtered_data):
     st.sidebar.markdown("### Totals in Analytics")
-    # total_doctors = filtered_data['doctor_id'].nunique()
-    # total_patients = filtered_data['id'].nunique()
-    # total_rx = filtered_data['ptp_id'].nunique()
-    total_doctors = 1245
-    total_patients = 195098
-    total_rx = 234135
+    total_doctors = filtered_data['doctor_id'].nunique()
+    total_patients = filtered_data['id'].nunique()
+    total_rx = filtered_data['ptp_id'].nunique()
+    # total_doctors = 1245
+    # total_patients = 195098
+    # total_rx = 234135
     st.sidebar.metric("Total Doctors", total_doctors)
     st.sidebar.metric("Total Patients", total_patients)
     st.sidebar.metric("Total Rx", total_rx)
@@ -825,115 +825,104 @@ def manufacturer_comparison_tab(tab, data):
     with tab:
         st.subheader("Manufacturer Comparison")
 
-        # Select manufacturers to compare
-        manufacturers = data['manufacturers'].dropna().unique()
-        selected_manufacturers = st.multiselect("Select Manufacturers for Comparison", sorted(manufacturers))
+        # 1) explode once
+        exploded = _explode_primary_use(data)
 
-        if not selected_manufacturers:
-            st.info("Select at least one manufacturer to view the comparison.")
-            return
-
-        # Filter data for selected manufacturers
-        filtered_data = data[data['manufacturers'].isin(selected_manufacturers)]
-        filtered_data = filtered_data[filtered_data['primary_use'].str.strip() != ""]
-
-        # Explode the primary_use column into multiple rows
-        exploded_data = filtered_data.copy()
-        exploded_data = exploded_data.dropna(subset=['primary_use'])
-        exploded_data = exploded_data.assign(
-            exploded_primary_use=exploded_data['primary_use'].str.split('|')
-        ).explode('exploded_primary_use')
-        exploded_data['exploded_primary_use'] = exploded_data['exploded_primary_use'].str.strip().str.upper()
-
-        # Get unique primary uses for selection
-        unique_primary_uses = sorted(exploded_data['exploded_primary_use'].dropna().unique())
-        selected_primary_uses = st.multiselect("Select Primary Uses for Comparison", unique_primary_uses)
-
-        if not selected_primary_uses:
-            st.info("Select at least one primary use to view the comparison.")
-            return
-
-        # Filter data for selected primary uses
-        filtered_data = exploded_data[exploded_data['exploded_primary_use'].isin(selected_primary_uses)]
-
-        # **Bar Chart - Total Medicines per Manufacturer**
-        manufacturer_counts = filtered_data.groupby('manufacturers')['id'].count().reset_index()
-        manufacturer_counts.columns = ['Manufacturer', 'Total Medicines']
-
-        fig_pie = px.pie(
-            manufacturer_counts,
-            names='Manufacturer',
-            values='Total Medicines',
-            title='Total Medicines per Manufacturer',
-            hole=0.4
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
-        # Create separate pie charts for each primary use
-        primary_use_data = filtered_data.groupby(['exploded_primary_use', 'manufacturers'])['id'].count().reset_index()
-        primary_use_data.columns = ['Primary Use', 'Manufacturer', 'Count']
-
-        # Get unique primary uses
-        unique_primary_uses = primary_use_data['Primary Use'].unique()
-
-        # Create multiple columns for pie charts
-        cols = st.columns(2)  # 2 charts per row
-        for i, primary_use in enumerate(unique_primary_uses):
-            # Filter data for current primary use
-            use_data = primary_use_data[primary_use_data['Primary Use'] == primary_use]
-
-            # Create pie chart
-            fig = px.pie(
-                use_data,
-                names='Manufacturer',
-                values='Count',
-                title=f'Distribution for {primary_use}',
-                hole=0.4
+        # 2) present both selectors inside a form
+        with st.form("manufacturer_cmp"):
+            m_choices = sorted(data['manufacturers'].dropna().unique())
+            selected_manufacturers = st.multiselect(
+                "Select Manufacturer(s)", m_choices, key="mc_manufs"
             )
 
-            # Display chart in alternating columns
+            u_choices = sorted(exploded['exploded_primary_use'].unique())
+            selected_uses = st.multiselect(
+                "Select Primary Use(s)", u_choices, key="mc_uses"
+            )
+
+            do_compare = st.form_submit_button("Compare")
+
+        # 3) if form not yet submitted, prompt and exit
+        if not do_compare:
+            st.info("Pick one or more manufacturers AND primary uses, then click **Compare**")
+            return
+
+        # 4) filter exploded frame in one pass
+        subset = exploded.loc[
+            exploded['manufacturers'].isin(selected_manufacturers) &
+            exploded['exploded_primary_use'].isin(selected_uses)
+        ]
+
+        # 5) total meds per manufacturer
+        total_counts = (
+            subset
+            .groupby('manufacturers')['value']
+            .count()
+            .reset_index(name='Total Medicines')
+        )
+        fig = px.pie(
+            total_counts,
+            names='manufacturers',
+            values='Total Medicines',
+            hole=0.4,
+            title="Total Medicines per Manufacturer"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # 6) one pie per selected primary use
+        pu_counts = (
+            subset
+            .groupby(['exploded_primary_use','manufacturers'])['value']
+            .count()
+            .reset_index(name='Count')
+        )
+
+        cols = st.columns(2)
+        for i, pu in enumerate(selected_uses):
+            dfp = pu_counts[pu_counts['exploded_primary_use']==pu]
+            fig2 = px.pie(
+                dfp,
+                names='manufacturers',
+                values='Count',
+                hole=0.4,
+                title=f"{pu}"
+            )
             with cols[i % 2]:
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig2, use_container_width=True)
 
-        # **Data Table: Medicines per Manufacturer and Primary Use**
-        for manufacturer in selected_manufacturers:
-            st.write(f"### Manufacturer: {manufacturer}")
-            manufacturer_data = filtered_data[filtered_data['manufacturers'] == manufacturer]
-
-            # Display total number of medicines for the manufacturer
-            total_medicines = manufacturer_data.shape[0]
-            st.write(f"**Total Medicines:** {total_medicines}")
-
-            for primary_use in selected_primary_uses:
-                st.write(f"**Primary Use: {primary_use}**")
-                use_data = manufacturer_data[manufacturer_data['exploded_primary_use'] == primary_use]
-
-                # Group by medicine and calculate metrics
-                metrics = (
-                    use_data.groupby('value')
-                    .agg(
-                        Medicine_Count=('id', 'count'),
-                        Unique_Patients=('id', 'nunique'),
+        # 7) detailed table per manufacturer × use
+        for m in selected_manufacturers:
+            st.markdown(f"### {m}")
+            mdf = subset[subset['manufacturers']==m]
+            st.metric("Total Rx lines", mdf.shape[0])
+            for pu in selected_uses:
+                st.markdown(f"**{pu}**")
+                dfmu = mdf[mdf['exploded_primary_use']==pu]
+                if dfmu.empty:
+                    st.write("No data")
+                else:
+                    metrics = (
+                        dfmu.groupby('value')
+                            .agg(
+                                Medicine_Count=('value','count'),
+                                Unique_Patients=('value','nunique')
+                            )
+                            .reset_index()
                     )
-                    .reset_index()
-                )
-
-                # Add percentage column for medicine counts
-                if not metrics.empty:
                     metrics['% Medicine Count'] = (
-                            metrics['Medicine_Count'] / metrics['Medicine_Count'].sum() * 100).round(2)
-
-                    # Display table with updated columns
+                        metrics['Medicine_Count']
+                        / metrics['Medicine_Count'].sum() * 100
+                    ).round(2)
                     st.dataframe(
-                        metrics.sort_values(by='Medicine_Count', ascending=False)
-                        .reset_index(drop=True)
+                        metrics
+                        .sort_values('Medicine_Count', ascending=False)
                         .rename(columns={
-                            'value': 'Medicine',
-                            'Medicine_Count': 'Total Medicines',
-                            'Unique_Patients': 'Unique Patients'
+                            'value':'Medicine',
+                            'Medicine_Count':'Count',
+                            'Unique_Patients':'Patients'
                         })
                     )
-                else:
-                    st.write("No data available for this primary use.")
+
 
 @log_time
 @st.cache_data
@@ -952,33 +941,47 @@ def _explode_primary_use(data: pd.DataFrame) -> pd.DataFrame:
 @log_time
 def visualize_market_share_primary_use(tab, data: pd.DataFrame):
     with tab:
-        st.subheader("Market Share Comparison by Manufacturers for a Primary Use")
+        st.subheader("Market Share Comparison by Manufacturer for a Primary Use")
 
-        # use cached exploded DataFrame
+        # 1) explode once with your cached helper
         exploded = _explode_primary_use(data)
         uses = sorted(exploded['exploded_primary_use'].unique())
-        selected = st.multiselect("Select Primary Uses", uses)
-        if not selected:
-            st.info("Select at least one primary use to view the market share comparison.")
+
+        # 2) wrap selectors + button in a form
+        with st.form("market_share_form"):
+            selected_uses = st.multiselect(
+                "Select Primary Use(s)", uses, key="ms_primary_uses"
+            )
+            show = st.form_submit_button("Show")
+
+        # 3) don't do anything until Show is clicked
+        if not show:
+            st.info("Pick one or more primary uses and click **Show**")
             return
 
-        # filter and group in one pass
-        filtered = exploded[exploded['exploded_primary_use'].isin(selected)]
+        # 4) require at least one choice
+        if not selected_uses:
+            st.warning("You must select at least one primary use.")
+            return
+
+        # 5) filter & aggregate
+        subset = exploded[exploded['exploded_primary_use'].isin(selected_uses)]
         market = (
-            filtered
+            subset
             .groupby('manufacturers', observed=True)
             .agg(Count=('value', 'count'))
             .reset_index()
         )
-        total_count = market['Count'].sum()
-        market['Share%'] = (market['Count'] / total_count * 100).round(2)
+        total = market['Count'].sum()
+        market['Share%'] = (market['Count'] / total * 100).round(2)
         market = market.sort_values('Share%', ascending=False).reset_index(drop=True)
 
-        st.subheader(f"Primary Uses: {', '.join(selected)}")
+        st.subheader(f"Primary Uses: {', '.join(selected_uses)}")
         if market.empty:
             st.warning("No data available for the selected primary uses.")
             return
 
+        # 6) pie + table
         fig = px.pie(
             market.head(20),
             names='manufacturers',
@@ -986,12 +989,12 @@ def visualize_market_share_primary_use(tab, data: pd.DataFrame):
             hole=0.4,
             hover_data=['Count'],
         )
-        c1, c2 = st.columns([60, 40])
+        c1, c2 = st.columns([3, 1])
         with c1:
             st.plotly_chart(fig, use_container_width=True)
         with c2:
             st.dataframe(market)
-            st.metric("Total", total_count)
+            st.metric("Total Rx Lines", total)
 
 
 # def visualize_market_share_primary_use(tab, data: pd.DataFrame):
@@ -1622,7 +1625,7 @@ def main():
     with col2:
         logo_path = 'logo.png'
 
-    path = 'data/demo_data.csv'
+    path = 'data/augmented_prescriptions_new_5.csv'
     data = load_data(path)
     cleaned_data = clean_medical_data(data)
     st.sidebar.title("Rx Analytics Filters")
