@@ -1,14 +1,19 @@
+import logging
+import sys
+import streamlit as st
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    stream=sys.stdout,
+    level=logging.INFO,
+    format="%(asctime)s [%(threadName)s] %(levelname)s %(message)s",
+)
 import json
 import os
 import time
 from datetime import datetime
 import pandas as pd
 import plotly.express as px
-import streamlit as st
 from streamlit import session_state as state
-import logging
-
-logger = logging.getLogger(__name__)
 
 def log_time(func):
     """Decorator to log start, end, and duration of a function call."""
@@ -107,7 +112,12 @@ def display_sidebar_totals(filtered_data):
 
 @log_time
 def aggregate_geo_data(data, group_by_column, count_column):
-    aggregated_data = data.groupby(group_by_column)[count_column].nunique().reset_index()
+    aggregated_data = (
+        data
+        .groupby(group_by_column, observed=True)[count_column]
+        .nunique()
+        .reset_index()
+    )
     aggregated_data.columns = [group_by_column, 'count']
     aggregated_data = aggregated_data.sort_values(by='count', ascending=False)
     return aggregated_data
@@ -172,7 +182,7 @@ def analyze_observation_by_gender(data):
         .dropna(subset=['value', 'gender'])
         .assign(value=lambda df: df['value'].str.upper())
         .assign(gender=lambda df: df['gender'].str.upper())
-        .groupby(['value', 'gender'])
+        .groupby(['value', 'gender'],observed=True)
         .size()
         .reset_index(name='count')
     )
@@ -377,70 +387,148 @@ def visualize_patient_demographics(tab, data):
                 total = gender_counts['count'].sum()
                 st.metric("Total", total)
 
+# @log_time
+# def visualize_medicines(tab, data):
+#     data = data[data['type'].str.lower() == 'medicine'].copy()
+#     data['value'] = data['value'].str.strip().str.upper()
+#     data = data.dropna(subset=['value'])
+#
+#     with tab:
+#         with st.expander("Top Medicines"):
+#             top_medicines = get_top_items(data, 'Medicine')
+#             col1, col2 = st.columns([3, 1])
+#             with col1:
+#                 st.plotly_chart(
+#                     create_bar_chart(top_medicines.head(20), 'count', 'Medicine', orientation='h', text='count',
+#                                      color='count'))
+#             with col2:
+#                 st.dataframe(top_medicines)
+#                 total = top_medicines['count'].sum()
+#                 st.metric("Total", total)
+#
+#         # Clean and explode primary use data
+#
+#         with st.expander("Top Medicines by Primary Use"):
+#             data['primary_use'] = data['primary_use'].fillna("").astype(str)
+#             exploded_data = data.copy()
+#             exploded_data = exploded_data[exploded_data['primary_use'].str.strip() != ""]
+#             exploded_data = exploded_data.assign(
+#                 exploded_primary_use=exploded_data['primary_use'].str.split('|')
+#             ).explode('exploded_primary_use')
+#             exploded_data['exploded_primary_use'] = exploded_data['exploded_primary_use'].str.strip().str.upper()
+#
+#             # Get unique primary uses for selection
+#             unique_primary_uses = exploded_data['exploded_primary_use'].dropna().unique()
+#             unique_primary_uses = sorted(unique_primary_uses)
+#             selected_primary_use = st.selectbox("Select Primary Use", unique_primary_uses, key="primary_use_select")
+#
+#             if not selected_primary_use:
+#                 st.info("Please select a primary use to view top medicines.")
+#                 return
+#
+#             # Filter data for the selected primary use
+#             filtered_data = exploded_data[exploded_data['exploded_primary_use'] == selected_primary_use]
+#
+#             # Group by medicine and calculate counts
+#             top_medicines = (
+#                 filtered_data[filtered_data['type'] == 'Medicine']
+#                 .groupby('value')
+#                 .size()
+#                 .reset_index(name='count')
+#                 .sort_values(by='count', ascending=False)
+#             )
+#
+#             # Display chart and table
+#             col1, col2 = st.columns([3, 1])
+#             with col1:
+#                 st.plotly_chart(
+#                     create_bar_chart(top_medicines.head(10), 'count', 'value', orientation='h', text='count',
+#                                      title=f"Top Medicines for {selected_primary_use}"),
+#                     use_container_width=True,
+#                     key="top_medicines_chart"
+#                 )
+#             with col2:
+#                 st.dataframe(top_medicines.reset_index(drop=True))
+#                 total = top_medicines['count'].sum()
+#                 st.metric("Total", total)
+@st.cache_data
+def _explode_primary_uses(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Cacheable helper: split and explode the 'primary_use' column into uppercase, stripped values.
+    """
+    df2 = df[['value', 'primary_use']].copy()
+    # Normalize and split
+    df2['primary_use'] = df2['primary_use'].fillna("")
+    df2['primary_use'] = df2['primary_use'].str.split('|')
+    # Explode and clean
+    df2 = df2.explode('primary_use')
+    df2['primary_use'] = df2['primary_use'].str.strip().str.upper()
+    # Drop blanks
+    return df2[df2['primary_use'] != ""]
+
 @log_time
-def visualize_medicines(tab, data):
-    data = data[data['type'].str.lower() == 'medicine'].copy()
-    data['value'] = data['value'].str.strip().str.upper()
-    data = data.dropna(subset=['value'])
+def visualize_medicines(tab, data: pd.DataFrame):
+    # Pre-filter and normalize
+    med = data.loc[data['type'].str.lower() == 'medicine', ['value', 'primary_use']].copy()
+    med['value'] = med['value'].str.strip().str.upper()
+    med = med[med['value'] != ""].dropna(subset=['value'])
 
     with tab:
+        # Top Medicines overall
         with st.expander("Top Medicines"):
-            top_medicines = get_top_items(data, 'Medicine')
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.plotly_chart(
-                    create_bar_chart(top_medicines.head(20), 'count', 'Medicine', orientation='h', text='count',
-                                     color='count'))
-            with col2:
-                st.dataframe(top_medicines)
-                total = top_medicines['count'].sum()
-                st.metric("Total", total)
-
-        # Clean and explode primary use data
-
-        with st.expander("Top Medicines by Primary Use"):
-            data['primary_use'] = data['primary_use'].fillna("").astype(str)
-            exploded_data = data.copy()
-            exploded_data = exploded_data[exploded_data['primary_use'].str.strip() != ""]
-            exploded_data = exploded_data.assign(
-                exploded_primary_use=exploded_data['primary_use'].str.split('|')
-            ).explode('exploded_primary_use')
-            exploded_data['exploded_primary_use'] = exploded_data['exploded_primary_use'].str.strip().str.upper()
-
-            # Get unique primary uses for selection
-            unique_primary_uses = exploded_data['exploded_primary_use'].dropna().unique()
-            unique_primary_uses = sorted(unique_primary_uses)
-            selected_primary_use = st.selectbox("Select Primary Use", unique_primary_uses, key="primary_use_select")
-
-            if not selected_primary_use:
-                st.info("Please select a primary use to view top medicines.")
-                return
-
-            # Filter data for the selected primary use
-            filtered_data = exploded_data[exploded_data['exploded_primary_use'] == selected_primary_use]
-
-            # Group by medicine and calculate counts
-            top_medicines = (
-                filtered_data[filtered_data['type'] == 'Medicine']
-                .groupby('value')
-                .size()
+            top_med = (
+                med['value']
+                .value_counts()
                 .reset_index(name='count')
-                .sort_values(by='count', ascending=False)
             )
+            top_med.columns = ['Medicine', 'count']
 
-            # Display chart and table
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.plotly_chart(
-                    create_bar_chart(top_medicines.head(10), 'count', 'value', orientation='h', text='count',
-                                     title=f"Top Medicines for {selected_primary_use}"),
-                    use_container_width=True,
-                    key="top_medicines_chart"
+            c1, c2 = st.columns([3, 1])
+            with c1:
+                fig = px.bar(
+                    top_med.head(20),
+                    x='count',
+                    y='Medicine',
+                    orientation='h',
+                    title="Top 20 Medicines",
+                    text='count'
                 )
-            with col2:
-                st.dataframe(top_medicines.reset_index(drop=True))
-                total = top_medicines['count'].sum()
-                st.metric("Total", total)
+                st.plotly_chart(fig, use_container_width=True)
+            with c2:
+                st.dataframe(top_med)
+                st.metric("Total", top_med['count'].sum())
+
+        # Top by primary use
+        with st.expander("Top Medicines by Primary Use"):
+            exploded = _explode_primary_uses(med)
+            uses = sorted(exploded['primary_use'].unique())
+            choice = st.selectbox("Select Primary Use", uses, key="primary_use_select")
+            if not choice:
+                st.info("Please select a primary use to view top medicines.")
+            else:
+                subset = exploded[exploded['primary_use'] == choice]
+                counts = (
+                    subset['value']
+                    .value_counts()
+                    .reset_index(name='count')
+                )
+                counts.columns = ['Medicine', 'count']
+
+                c1, c2 = st.columns([3, 1])
+                with c1:
+                    fig = px.bar(
+                        counts.head(10),
+                        x='count',
+                        y='Medicine',
+                        orientation='h',
+                        title=f"Top Medicines for {choice}",
+                        text='count'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                with c2:
+                    st.dataframe(counts)
+                    st.metric("Total", counts['count'].sum())
+
 
 @log_time
 def visualize_pharma_analytics(tab, filtered_medical_data):
@@ -1041,7 +1129,7 @@ def visualize_vitals(tab, data):
 
             with st.expander("Blood Pressure Distribution by Age Groups"):
                 # Add age-wise summary
-                age_summary = vital_data.groupby('age_group').agg({
+                age_summary = vital_data.groupby('age_group',observed=True).agg({
                     'systolic': ['count', 'mean', 'median', 'std', 'min', 'max'],
                     'diastolic': ['count', 'mean', 'median', 'std', 'min', 'max']
                 }).round(1)
@@ -1300,17 +1388,27 @@ def visualize_vitals(tab, data):
 
         else:
             st.warning(f"{selected_vital} sparse data")
+@log_time
+@st.cache_data
+def get_unique_states(state_series: pd.Series) -> list[str]:
+    # fill NaN, ensure string, split into columns, stack into one Series, strip & drop blanks
+    df = (
+        state_series
+        .fillna("")              # no NaNs
+        .astype(str)             # ensure str
+        .str.split(r'[,/]', expand=True)
+        .stack()                 # one big Series
+        .str.strip()             # remove whitespace
+    )
+    df = df[df != ""]            # drop empty strings
+    return sorted(df.unique().tolist())
 
 @log_time
-def get_state_filter(medical_data):
-    # Split and normalize state_name values if they are combined
-    medical_data['state_name'] = medical_data['state_name'].fillna("").astype(str)
-    exploded_states = medical_data['state_name'].str.split(r'[,/]').explode().str.strip()
-    unique_states = exploded_states.dropna().unique()
-
+def get_state_filter(medical_data: pd.DataFrame):
+    states = get_unique_states(medical_data['state_name'])
     return st.sidebar.multiselect(
         "Select State",
-        options=sorted(unique_states),
+        options=states,
         default=state.get("state_filter", []),
         key="state_filter"
     )
