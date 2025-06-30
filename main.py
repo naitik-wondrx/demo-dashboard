@@ -1471,7 +1471,7 @@ def main():
     with col2:
         logo_path = 'logo.png'
 
-    path = 'data/demo_half_data_50pct_doctors.csv'
+    path = 'data/demo_half_data.csv'
     data = load_data(path)
     cleaned_data = clean_medical_data(data)
     st.sidebar.title("Rx Analytics Filters")
