@@ -71,6 +71,7 @@ def clean_medical_data(data):
 
 
 @log_time
+@st.cache_data
 def apply_filters(data, state_filter=None, city_filter=None, pincode_filter=None, speciality_filter=None,
                   client_filter=None, project_filter=None):
     """Filters medical data based on multiple criteria including state, city, pincode, speciality, client, and project."""
@@ -95,6 +96,7 @@ def apply_filters(data, state_filter=None, city_filter=None, pincode_filter=None
 
 
 @log_time
+@st.cache_data
 def filter_by_date_range(data, start_date, end_date):
     # Ensure 'start_time' is in datetime format
     data['start_time'] = pd.to_datetime(data['start_time'], errors='coerce')  # Handle invalid dates
@@ -108,6 +110,7 @@ def filter_by_date_range(data, start_date, end_date):
 
 
 @log_time
+@st.cache_data
 def display_sidebar_totals(filtered_data):
     st.sidebar.markdown("### Totals in Analytics")
     total_doctors = filtered_data['doctor_id'].nunique()
@@ -133,6 +136,7 @@ def aggregate_geo_data(data, group_by_column, count_column):
     return aggregated_data
 
 @log_time
+@st.cache_data
 def create_bar_chart(data, x_column, y_column, title=None, orientation='v', color=None, text=None):
     return px.bar(
         data,
@@ -147,6 +151,7 @@ def create_bar_chart(data, x_column, y_column, title=None, orientation='v', colo
     )
 
 @log_time
+@st.cache_data
 def prepare_demographics(data):
     age_bins = [0, 18, 25, 30, 40, 50, 60, 70, 100]
     age_labels = ['<18', '18-25', '25-30', '30-40', '40-50', '50-60', '60-70', '70+']
@@ -162,6 +167,7 @@ def prepare_demographics(data):
                                                                                                 ascending=False)
 
 @log_time
+@st.cache_data
 def create_pie_chart(data, names_column, values_column, title=None, color_map=None):
     # Define color mapping for FEMALE and MALE
     return px.pie(
@@ -174,6 +180,7 @@ def create_pie_chart(data, names_column, values_column, title=None, color_map=No
     )
 
 @log_time
+@st.cache_data
 def get_top_items(data, item_type):
     top_items = (
         data[data['type'] == item_type]['value']
@@ -186,6 +193,7 @@ def get_top_items(data, item_type):
     return top_items
 
 @log_time
+@st.cache_data
 def analyze_observation_by_gender(data):
     observation_gender = (
         data[data['type'] == 'Observation']
@@ -202,6 +210,7 @@ def analyze_observation_by_gender(data):
     return observation_gender
 
 @log_time
+@st.cache_data
 def analyze_diagnostics_by_gender(data):
     diagnostics_gender = (
         data[data['type'] == 'Diagnostic']
@@ -218,6 +227,7 @@ def analyze_diagnostics_by_gender(data):
     return diagnostics_gender
 
 @log_time
+@st.cache_data
 def analyze_pharma_data(filtered_data):
     """
     Analyze pharma data to extract top manufacturers and primary uses.
@@ -305,72 +315,6 @@ def preprocess_column(data, column_name):
     return data
 
 
-#
-# def visualize_geographical_distribution(tab, data):
-#     with tab:
-#         # Preprocess 'state_name' and 'city' columns to handle comma-separated values
-#         data = preprocess_column(data, 'state_name')
-#         data = preprocess_column(data, 'city')
-#
-#         with st.expander("Patient Distribution by State"):
-#             patient_state_counts = aggregate_geo_data(data, 'state_name', 'id')
-#             col1, col2 = st.columns([3, 1])
-#             with col1:
-#                 st.plotly_chart(
-#                     create_bar_chart(patient_state_counts.head(15), 'count', 'state_name', orientation='h',
-#                                      text='count', color='count'),
-#                     use_container_width=True,
-#                     key="patient_state_chart"
-#                 )
-#             with col2:
-#                 st.dataframe(patient_state_counts.reset_index(drop=True), key="patient_state_table")
-#                 total = patient_state_counts['count'].sum()
-#                 st.metric("Total", total)
-#
-#         with st.expander("Patient Distribution by City"):
-#             patient_city_counts = aggregate_geo_data(data, 'city', 'id')
-#             col3, col4 = st.columns([3, 1])
-#             with col3:
-#                 st.plotly_chart(
-#                     create_bar_chart(patient_city_counts.head(25), 'count', 'city', orientation='h', text='count',
-#                                      color='count'),
-#                     use_container_width=True,
-#                     key="patient_city_chart"
-#                 )
-#             with col4:
-#                 st.dataframe(patient_city_counts.reset_index(drop=True), key="patient_city_table")
-#                 total = patient_city_counts['count'].sum()
-#                 st.metric("Total", total)
-#
-#         with st.expander("Doctor Distribution by State"):
-#             doctor_state_counts = aggregate_geo_data(data, 'state_name', 'doctor_id')
-#             col5, col6 = st.columns([3, 1])
-#             with col5:
-#                 st.plotly_chart(
-#                     create_bar_chart(doctor_state_counts.head(15), 'count', 'state_name', orientation='h', text='count',
-#                                      color='count'),
-#                     use_container_width=True,
-#                     key="doctor_state_chart"
-#                 )
-#             with col6:
-#                 st.dataframe(doctor_state_counts.reset_index(drop=True), key="doctor_state_table")
-#                 total = doctor_state_counts['count'].sum()
-#                 st.metric("Total", total)
-#
-#         with st.expander("Doctor Distribution by City"):
-#             doctor_city_counts = aggregate_geo_data(data, 'city', 'doctor_id')
-#             col7, col8 = st.columns([3, 1])
-#             with col7:
-#                 st.plotly_chart(
-#                     create_bar_chart(doctor_city_counts.head(25), 'count', 'city', orientation='h', text='count',
-#                                      color='count'),
-#                     use_container_width=True,
-#                     key="doctor_city_chart"
-#                 )
-#             with col8:
-#                 st.dataframe(doctor_city_counts.reset_index(drop=True), key="doctor_city_table")
-#                 total = doctor_city_counts['count'].sum()
-#                 st.metric("Total", total)
 @log_time
 @st.cache_data
 def _explode_geo(df: pd.DataFrame, col: str) -> pd.DataFrame:
@@ -462,71 +406,6 @@ def visualize_patient_demographics(tab, data):
                 total = gender_counts['count'].sum()
                 st.metric("Total", total)
 
-
-#
-# def visualize_medicines(tab, data):
-#     data = data[data['type'].str.lower() == 'medicine'].copy()
-#     data['value'] = data['value'].str.strip().str.upper()
-#     data = data.dropna(subset=['value'])
-#
-#     with tab:
-#         with st.expander("Top Medicines"):
-#             top_medicines = get_top_items(data, 'Medicine')
-#             col1, col2 = st.columns([3, 1])
-#             with col1:
-#                 st.plotly_chart(
-#                     create_bar_chart(top_medicines.head(20), 'count', 'Medicine', orientation='h', text='count',
-#                                      color='count'))
-#             with col2:
-#                 st.dataframe(top_medicines)
-#                 total = top_medicines['count'].sum()
-#                 st.metric("Total", total)
-#
-#         # Clean and explode primary use data
-#
-#         with st.expander("Top Medicines by Primary Use"):
-#             data['primary_use'] = data['primary_use'].fillna("").astype(str)
-#             exploded_data = data.copy()
-#             exploded_data = exploded_data[exploded_data['primary_use'].str.strip() != ""]
-#             exploded_data = exploded_data.assign(
-#                 exploded_primary_use=exploded_data['primary_use'].str.split('|')
-#             ).explode('exploded_primary_use')
-#             exploded_data['exploded_primary_use'] = exploded_data['exploded_primary_use'].str.strip().str.upper()
-#
-#             # Get unique primary uses for selection
-#             unique_primary_uses = exploded_data['exploded_primary_use'].dropna().unique()
-#             unique_primary_uses = sorted(unique_primary_uses)
-#             selected_primary_use = st.selectbox("Select Primary Use", unique_primary_uses, key="primary_use_select")
-#
-#             if not selected_primary_use:
-#                 st.info("Please select a primary use to view top medicines.")
-#                 return
-#
-#             # Filter data for the selected primary use
-#             filtered_data = exploded_data[exploded_data['exploded_primary_use'] == selected_primary_use]
-#
-#             # Group by medicine and calculate counts
-#             top_medicines = (
-#                 filtered_data[filtered_data['type'] == 'Medicine']
-#                 .groupby('value')
-#                 .size()
-#                 .reset_index(name='count')
-#                 .sort_values(by='count', ascending=False)
-#             )
-#
-#             # Display chart and table
-#             col1, col2 = st.columns([3, 1])
-#             with col1:
-#                 st.plotly_chart(
-#                     create_bar_chart(top_medicines.head(10), 'count', 'value', orientation='h', text='count',
-#                                      title=f"Top Medicines for {selected_primary_use}"),
-#                     use_container_width=True,
-#                     key="top_medicines_chart"
-#                 )
-#             with col2:
-#                 st.dataframe(top_medicines.reset_index(drop=True))
-#                 total = top_medicines['count'].sum()
-#                 st.metric("Total", total)
 @log_time
 @st.cache_data
 def _explode_primary_uses(df: pd.DataFrame) -> pd.DataFrame:
@@ -638,38 +517,6 @@ def visualize_pharma_analytics(tab, filtered_medical_data):
                     st.metric("Total", total)
             else:
                 st.warning("No data available for Top Primary Uses.")
-
-        # # Expander for Manufacturers by Primary Use
-        # with st.expander("Manufacturers by Primary Use"):
-        #     if top_15_primary_uses is not None and not top_15_primary_uses.empty:
-        #         # Create a dropdown to select a primary use
-        #         selected_primary_use = st.selectbox("Select Primary Use", top_15_primary_uses['primary_use'].unique())
-
-        #         # Filter the data for the selected primary use
-        #         filtered_data = filtered_medical_data[
-        #             filtered_medical_data['primary_use'].str.contains(selected_primary_use, case=False, na=False)]
-
-        #         if not filtered_data.empty:
-        #             # Group by manufacturers and count occurrences
-        #             manufacturer_counts = (
-        #                 filtered_data.groupby('manufacturers')
-        #                 .size()
-        #                 .reset_index(name='count')
-        #                 .sort_values(by='count', ascending=False)
-        #             )
-        #             col1, col2 = st.columns([3, 1])
-        #             with col1:
-        #                 st.plotly_chart(
-        #                     create_bar_chart(manufacturer_counts.head(10), 'count', 'manufacturers', orientation='h',
-        #                                      text='count', color='count'))
-        #             with col2:
-        #                 st.dataframe(manufacturer_counts.reset_index(drop=True))
-        #                 total = manufacturer_counts['count'].sum()
-        #                 st.metric("Total", total)
-        #         else:
-        #             st.warning(f"No data available for the selected primary use: {selected_primary_use}")
-        #     else:
-        #         st.warning("No data available for Manufacturers by Primary Use.")
 
 @log_time
 def visualize_observations(tab, data):
@@ -996,49 +843,6 @@ def visualize_market_share_primary_use(tab, data: pd.DataFrame):
             st.dataframe(market)
             st.metric("Total Rx Lines", total)
 
-
-# def visualize_market_share_primary_use(tab, data: pd.DataFrame):
-#     with tab:
-#         st.subheader("Market Share Comparison by Manufacturers for a Primary Use")
-#
-#         # use cached exploded DataFrame
-#         exploded = _explode_primary_use(data)
-#         uses = sorted(exploded['exploded_primary_use'].unique())
-#         selected = st.multiselect("Select Primary Uses", uses)
-#         if not selected:
-#             st.info("Select at least one primary use to view the market share comparison.")
-#             return
-#
-#         # filter and group in one pass
-#         filtered = exploded[exploded['exploded_primary_use'].isin(selected)]
-#         market = (
-#             filtered
-#             .groupby('manufacturers', observed=True)
-#             .agg(Count=('value','count'))
-#             .reset_index()
-#         )
-#         total_count = market['Count'].sum()
-#         market['Share%'] = (market['Count'] / total_count * 100).round(2)
-#         market = market.sort_values('Share%', ascending=False).reset_index(drop=True)
-#
-#         st.subheader(f"Primary Uses: {', '.join(selected)}")
-#         if market.empty:
-#             st.warning("No data available for the selected primary uses.")
-#             return
-#
-#         fig = px.pie(
-#             market.head(20),
-#             names='manufacturers',
-#             values='Share%',
-#             hole=0.4,
-#             hover_data=['Count'],
-#         )
-#         c1, c2 = st.columns([60,40])
-#         with c1:
-#             st.plotly_chart(fig, use_container_width=True)
-#         with c2:
-#             st.dataframe(market)
-#             st.metric("Total", total_count)
 
 @log_time
 def visualize_value_comparison(tab, data):
@@ -1625,85 +1429,76 @@ def main():
     with col2:
         logo_path = 'logo.png'
 
-    path = 'data/augmented_prescriptions_new_5.csv'
+    path = 'data/demo_half_data.csv'
     data = load_data(path)
     cleaned_data = clean_medical_data(data)
     st.sidebar.title("Rx Analytics Filters")
 
-    state_filter = get_state_filter(cleaned_data)
-    city_filter = get_city_filter(cleaned_data, state_filter)
-    pincode_filter = get_pincode_filter(cleaned_data, state_filter, city_filter)
-    speciality_filter = get_speciality_filter(cleaned_data, pincode_filter)
-    client_filter = get_client_filter(cleaned_data)
-    project_filter = get_project_filter(cleaned_data, client_filter)
+    # --- BATCH FILTERS IN A FORM ---
+    with st.sidebar.form("filters_form"):
+        state_filter = get_state_filter(cleaned_data)
+        city_filter = get_city_filter(cleaned_data, state_filter)
+        pincode_filter = get_pincode_filter(cleaned_data, state_filter, city_filter)
+        speciality_filter = get_speciality_filter(cleaned_data, pincode_filter)
+        client_filter = get_client_filter(cleaned_data)
+        project_filter = get_project_filter(cleaned_data, client_filter)
 
-    st.sidebar.header("Analytics Time Period")
-    # First row of buttons
-    col1, col2 = st.sidebar.columns(2)
-    start_date_val = datetime(2020, 1, 1)
-    end_date_val = datetime.today()
-    # Add session state keys for each button
-    if "current_fy" not in state:
-        state.current_fy = False
-    if "previous_month" not in state:
-        state.previous_month = False
+        st.header("Analytics Time Period")
+        # First row of buttons
+        col1, col2 = st.columns(2)
+        start_date_val = datetime(2020, 1, 1)
+        end_date_val = datetime.today()
+        # Add session state keys for each button
+        if "current_fy" not in state:
+            state.current_fy = False
+        if "previous_month" not in state:
+            state.previous_month = False
 
-    if col1.button("Current FY"):
-        current_year = datetime.today().year
-        state.start_date = datetime(current_year - 1, 4, 1)
-        state.end_date = datetime.today()
-        state.current_fy = True
-        state.previous_month = False
+        quick_range = st.radio(
+            "Quick Date Range",
+            options=["Custom", "Current FY", "Previous Month", "Year To Date", "Previous Week"],
+            index=0,
+            horizontal=False
+        )
 
-    if col2.button("Previous Month"):
-        today = datetime.today()
-        first_day_current_month = datetime(today.year, today.month, 1)
-        last_day_prev_month = first_day_current_month - pd.Timedelta(days=1)
-        state.start_date = datetime(last_day_prev_month.year, last_day_prev_month.month, 1)
-        state.end_date = last_day_prev_month
-        state.previous_month = True
-        state.current_fy = False
+        # Use session state to set the default values for the date inputs
+        start_date = st.date_input(
+            "Start Date",
+            value=state.get("start_date", start_date_val).date() if isinstance(state.get("start_date"), datetime) else state.get("start_date", start_date_val),
+            key="start_date",
+            max_value=datetime.today().date(),
+            format="DD-MM-YYYY",
+        )
+        end_date = st.date_input(
+            "End Date",
+            value=state.get("end_date", end_date_val).date() if isinstance(state.get("end_date"), datetime) else state.get("end_date", end_date_val),
+            key="end_date",
+            min_value=start_date,
+            max_value=datetime.today().date(),
+            format="DD-MM-YYYY",
+        )
+        apply_filters_btn = st.form_submit_button("Apply")
 
-    # Second row of buttons
-    col3, col4 = st.sidebar.columns([1, 1])
+    # --- Only update filters when Apply is pressed ---
+    if apply_filters_btn or not all(k in state for k in ["applied_state_filter", "applied_city_filter", "applied_pincode_filter", "applied_speciality_filter", "applied_client_filter", "applied_project_filter", "applied_start_date", "applied_end_date"]):
+        state.applied_state_filter = state_filter
+        state.applied_city_filter = city_filter
+        state.applied_pincode_filter = pincode_filter
+        state.applied_speciality_filter = speciality_filter
+        state.applied_client_filter = client_filter
+        state.applied_project_filter = project_filter
+        state.applied_start_date = start_date
+        state.applied_end_date = end_date
 
-    if "year_to_date" not in state:
-        state.year_to_date = False
-    if "previous_week" not in state:
-        state.previous_week = False
-
-    if col3.button("Year To Date"):
-        today = datetime.today()
-        state.start_date = datetime(today.year, 1, 1)
-        state.end_date = today
-        state.year_to_date = True
-        state.previous_week = False
-
-    if col4.button("Previous Week"):
-        today = datetime.today()
-        state.start_date = today - pd.Timedelta(days=today.weekday() + 7)
-        state.end_date = state.start_date + pd.Timedelta(days=6)
-        state.previous_week = True
-        state.year_to_date = False
-    # Use session state to set the default values for the date inputs
-    start_date = st.sidebar.date_input(
-        "Start Date",
-        value=state.get("start_date", start_date_val).date() if isinstance(state.get("start_date"),
-                                                                           datetime) else state.get("start_date",
-                                                                                                    start_date_val),
-        key="start_date",
-        max_value=datetime.today().date(),
-        format="DD-MM-YYYY",
-    )
-    end_date = st.sidebar.date_input(
-        "End Date",
-        value=state.get("end_date", end_date_val).date() if isinstance(state.get("end_date"), datetime) else state.get(
-            "end_date", end_date_val),
-        key="end_date",
-        min_value=start_date,
-        max_value=datetime.today().date(),
-        format="DD-MM-YYYY",
-    )
+    # Use the applied filters from session state
+    state_filter = state.applied_state_filter
+    city_filter = state.applied_city_filter
+    pincode_filter = state.applied_pincode_filter
+    speciality_filter = state.applied_speciality_filter
+    client_filter = state.applied_client_filter
+    project_filter = state.applied_project_filter
+    start_date = state.applied_start_date
+    end_date = state.applied_end_date
 
     title_placeholder.title(f"From: {start_date.strftime('%d-%m-%Y')} to {end_date.strftime('%d-%m-%Y')}")
 
