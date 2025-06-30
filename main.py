@@ -16,6 +16,13 @@ import pandas as pd
 import plotly.express as px
 from streamlit import session_state as state
 
+SCALE_FACTOR = 47
+
+def scale_count(x):
+    try:
+        return int(x) * SCALE_FACTOR
+    except Exception:
+        return x
 
 def log_time(func):
     """Decorator to log start, end, and duration of a function call."""
@@ -119,9 +126,9 @@ def display_sidebar_totals(filtered_data):
     # total_doctors = 1245
     # total_patients = 195098
     # total_rx = 234135
-    st.sidebar.metric("Total Doctors", total_doctors)
-    st.sidebar.metric("Total Patients", total_patients)
-    st.sidebar.metric("Total Rx", total_rx)
+    st.sidebar.metric("Total Doctors", scale_count(total_doctors))
+    st.sidebar.metric("Total Patients", scale_count(total_patients))
+    st.sidebar.metric("Total Rx", scale_count(total_rx))
 
 
 def aggregate_geo_data(data, group_by_column, count_column):
@@ -284,22 +291,29 @@ def visualize_data_types(tab, data):
 
             col1, col2 = st.columns([3, 1])
             with col1:
-                st.plotly_chart(create_pie_chart(type_counts, 'Type', 'Count'))
+                type_counts_scaled = type_counts.copy()
+                type_counts_scaled['Count'] = type_counts_scaled['Count'].apply(scale_count)
+                st.plotly_chart(create_pie_chart(type_counts_scaled, 'Type', 'Count'))
             with col2:
-                st.dataframe(type_counts)
+                type_counts_scaled = type_counts.copy()
+                type_counts_scaled['Count'] = type_counts_scaled['Count'].apply(scale_count)
+                st.dataframe(type_counts_scaled)
                 total = type_counts['Count'].sum()
-                st.metric("Total", total)
+                st.metric("Total", scale_count(total))
         with st.expander("Distribution of Speciality Doctors"):
             speciality_counts = data.groupby('speciality')['doctor_id'].nunique().reset_index()
             speciality_counts.columns = ['Speciality', 'Count']
 
             col1, col2 = st.columns([2, 1])
             with col1:
-                st.plotly_chart(create_pie_chart(speciality_counts, 'Speciality', 'Count'))
+                speciality_counts_scaled = speciality_counts.copy()
+                speciality_counts_scaled['Count'] = speciality_counts_scaled['Count'].apply(scale_count)
+                st.plotly_chart(create_pie_chart(speciality_counts_scaled, 'Speciality', 'Count'))
             with col2:
-                st.dataframe(speciality_counts.sort_values(by='Count', ascending=False).reset_index(drop=True))
+                speciality_counts_scaled = speciality_counts.sort_values(by='Count', ascending=False).reset_index(drop=True)
+                st.dataframe(speciality_counts.sort_values(by='Count', ascending=False).reset_index(drop=True).applymap(scale_count))
                 total = speciality_counts['Count'].sum()
-                st.metric("Total", total)
+                st.metric("Total", scale_count(total))
 
 @log_time
 def preprocess_column(data, column_name):
@@ -378,7 +392,7 @@ def visualize_geographical_distribution(tab, data: pd.DataFrame):
                     st.plotly_chart(fig, use_container_width=True, key=f"{key}_chart")
                 with c2:
                     st.dataframe(df_counts.reset_index(drop=True), key=f"{key}_table")
-                    st.metric("Total", df_counts['count'].sum())
+                    st.metric("Total", scale_count(df_counts['count'].sum()))
 
 @log_time
 def visualize_patient_demographics(tab, data):
@@ -392,9 +406,9 @@ def visualize_patient_demographics(tab, data):
             with col1:
                 st.plotly_chart(create_pie_chart(age_group_counts, 'age_group', 'count'))
             with col2:
-                st.dataframe(age_group_counts.sort_values(by='age_group', ascending=True).reset_index(drop=True))
+                st.dataframe(age_group_counts.sort_values(by='age_group', ascending=True).reset_index(drop=True).applymap(scale_count))
                 total = age_group_counts['count'].sum()
-                st.metric("Total", total)
+                st.metric("Total", scale_count(total))
 
         with st.expander("Gender Distribution of Patients"):
             col1, col2 = st.columns([3, 1])
@@ -402,9 +416,9 @@ def visualize_patient_demographics(tab, data):
                 st.plotly_chart(create_pie_chart(gender_counts, 'gender', 'count',
                                                  color_map={'FEMALE': '#FF69B4', 'MALE': '#0F52BA'}))
             with col2:
-                st.dataframe(gender_counts)
+                st.dataframe(gender_counts.applymap(scale_count))
                 total = gender_counts['count'].sum()
-                st.metric("Total", total)
+                st.metric("Total", scale_count(total))
 
 @log_time
 @st.cache_data
@@ -439,10 +453,12 @@ def visualize_medicines(tab, data: pd.DataFrame):
             )
             top_med.columns = ['Medicine', 'count']
 
-            c1, c2 = st.columns([3, 1])
-            with c1:
+            top_med_scaled = top_med.copy()
+            top_med_scaled['count'] = top_med_scaled['count'].apply(scale_count)
+            col1, col2 = st.columns([3, 1])
+            with col1:
                 fig = px.bar(
-                    top_med.head(20),
+                    top_med_scaled.head(20),
                     x='count',
                     y='Medicine',
                     orientation='h',
@@ -450,9 +466,9 @@ def visualize_medicines(tab, data: pd.DataFrame):
                     text='count'
                 )
                 st.plotly_chart(fig, use_container_width=True)
-            with c2:
-                st.dataframe(top_med)
-                st.metric("Total", top_med['count'].sum())
+            with col2:
+                st.dataframe(top_med_scaled)
+                st.metric("Total", scale_count(top_med['count'].sum()))
 
         # Top by primary use
         with st.expander("Top Medicines by Primary Use"):
@@ -470,10 +486,12 @@ def visualize_medicines(tab, data: pd.DataFrame):
                 )
                 counts.columns = ['Medicine', 'count']
 
-                c1, c2 = st.columns([3, 1])
-                with c1:
+                counts_scaled = counts.copy()
+                counts_scaled['count'] = counts_scaled['count'].apply(scale_count)
+                col1, col2 = st.columns([3, 1])
+                with col1:
                     fig = px.bar(
-                        counts.head(10),
+                        counts_scaled.head(10),
                         x='count',
                         y='Medicine',
                         orientation='h',
@@ -481,9 +499,9 @@ def visualize_medicines(tab, data: pd.DataFrame):
                         text='count'
                     )
                     st.plotly_chart(fig, use_container_width=True)
-                with c2:
-                    st.dataframe(counts)
-                    st.metric("Total", counts['count'].sum())
+                with col2:
+                    st.dataframe(counts_scaled)
+                    st.metric("Total", scale_count(counts['count'].sum()))
 
 @log_time
 def visualize_pharma_analytics(tab, filtered_medical_data):
@@ -495,10 +513,13 @@ def visualize_pharma_analytics(tab, filtered_medical_data):
             if top_15_manufacturers is not None and not top_15_manufacturers.empty:
                 col1, col2 = st.columns([3, 2])
                 with col1:
-                    st.plotly_chart(create_pie_chart(top_15_manufacturers.head(15), 'manufacturers', 'count'))
+                    top_15_manufacturers_scaled = top_15_manufacturers.copy()
+                    if 'count' in top_15_manufacturers_scaled.columns:
+                        top_15_manufacturers_scaled['count'] = top_15_manufacturers_scaled['count'].apply(scale_count)
+                    st.plotly_chart(create_pie_chart(top_15_manufacturers_scaled.head(15), 'manufacturers', 'count'))
                 with col2:
-                    st.dataframe(top_15_manufacturers)
-                    total = top_15_manufacturers['count'].sum()
+                    st.dataframe(top_15_manufacturers.applymap(scale_count))
+                    total = scale_count(top_15_manufacturers['count'].sum())
                     st.metric("Total", total)
             else:
                 st.warning("No data available for Top Manufacturers.")
@@ -508,12 +529,15 @@ def visualize_pharma_analytics(tab, filtered_medical_data):
             if top_15_primary_uses is not None and not top_15_primary_uses.empty:
                 col1, col2 = st.columns([3, 1])
                 with col1:
+                    top_15_primary_uses_scaled = top_15_primary_uses.copy()
+                    if 'count' in top_15_primary_uses_scaled.columns:
+                        top_15_primary_uses_scaled['count'] = top_15_primary_uses_scaled['count'].apply(scale_count)
                     st.plotly_chart(
-                        create_bar_chart(top_15_primary_uses.head(15), 'count', 'primary_use', orientation='h',
+                        create_bar_chart(top_15_primary_uses_scaled.head(15), 'count', 'primary_use', orientation='h',
                                          text='count', color='count'))
                 with col2:
-                    st.dataframe(top_15_primary_uses)
-                    total = top_15_primary_uses['count'].sum()
+                    st.dataframe(top_15_primary_uses.applymap(scale_count))
+                    total = scale_count(top_15_primary_uses['count'].sum())
                     st.metric("Total", total)
             else:
                 st.warning("No data available for Top Primary Uses.")
@@ -529,14 +553,16 @@ def visualize_observations(tab, data):
     with tab:
         with st.expander("Top Observations"):
             top_observations = get_top_items(data, 'Observation')
+            top_observations_scaled = top_observations.copy()
+            top_observations_scaled['count'] = top_observations_scaled['count'].apply(scale_count)
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.plotly_chart(
-                    create_bar_chart(top_observations.head(20), 'count', 'Observation', orientation='h', text='count',
+                    create_bar_chart(top_observations_scaled.head(20), 'count', 'Observation', orientation='h', text='count',
                                      color='count'))
             with col2:
-                st.dataframe(top_observations)
-                total = top_observations['count'].sum()
+                st.dataframe(top_observations.applymap(scale_count))
+                total = scale_count(top_observations['count'].sum())
                 st.metric("Total", total)
 
         with st.expander("Observations by Gender"):
@@ -547,12 +573,14 @@ def visualize_observations(tab, data):
             observations_pivot['Total'] = observations_pivot.sum(axis=1)
             observations_pivot = observations_pivot.sort_values(by='Total', ascending=False)
 
+            obs_pivot_scaled = observations_pivot.head(20).reset_index().drop(columns='Total').melt(id_vars='value',
+                                                                                         var_name='gender',
+                                                                                         value_name='count')
+            obs_pivot_scaled['count'] = obs_pivot_scaled['count'].apply(scale_count)
             col1, col2 = st.columns([70, 30])
             with col1:
                 st.plotly_chart(create_bar_chart(
-                    observations_pivot.head(20).reset_index().drop(columns='Total').melt(id_vars='value',
-                                                                                         var_name='gender',
-                                                                                         value_name='count'),
+                    obs_pivot_scaled,
                     'count',
                     'value',
                     orientation='h',
@@ -560,7 +588,7 @@ def visualize_observations(tab, data):
                     text='count'
                 ))
             with col2:
-                st.dataframe(observations_pivot)
+                st.dataframe(observations_pivot.applymap(scale_count))
 
 @log_time
 def visualize_diagnostics(tab, data):
@@ -572,17 +600,19 @@ def visualize_diagnostics(tab, data):
     with tab:
         with st.expander("Top Diagnostics"):
             top_diagnostics = get_top_items(data, 'Diagnostic')
+            top_diagnostics_scaled = top_diagnostics.copy()
+            top_diagnostics_scaled['count'] = top_diagnostics_scaled['count'].apply(scale_count)
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.plotly_chart(
-                    create_bar_chart(top_diagnostics.head(20), 'count', 'Diagnostic', orientation='h', text='count',
+                    create_bar_chart(top_diagnostics_scaled.head(20), 'count', 'Diagnostic', orientation='h', text='count',
                                      color='count'),
                     use_container_width=True,
                     key="top_diagnostics_chart"
                 )
             with col2:
-                st.dataframe(top_diagnostics, key="top_diagnostics_table")
-                total = top_diagnostics['count'].sum()
+                st.dataframe(top_diagnostics.applymap(scale_count), key="top_diagnostics_table")
+                total = scale_count(top_diagnostics['count'].sum())
                 st.metric("Total", total)
 
         with st.expander("Diagnostics by Gender"):
@@ -593,13 +623,15 @@ def visualize_diagnostics(tab, data):
             diagnostics_pivot['Total'] = diagnostics_pivot.sum(axis=1)
             diagnostics_pivot = diagnostics_pivot.sort_values(by='Total', ascending=False)
 
+            diag_pivot_scaled = diagnostics_pivot.head(15).reset_index().drop(columns='Total').melt(id_vars='value',
+                                                                                            var_name='gender',
+                                                                                            value_name='count')
+            diag_pivot_scaled['count'] = diag_pivot_scaled['count'].apply(scale_count)
             col1, col2 = st.columns([70, 30])
             with col1:
                 st.plotly_chart(
                     create_bar_chart(
-                        diagnostics_pivot.head(15).reset_index().drop(columns='Total').melt(id_vars='value',
-                                                                                            var_name='gender',
-                                                                                            value_name='count'),
+                        diag_pivot_scaled,
                         'count',
                         'value',
                         orientation='h',
@@ -610,7 +642,7 @@ def visualize_diagnostics(tab, data):
                     key="diagnostics_by_gender_chart"
                 )
             with col2:
-                st.dataframe(diagnostics_pivot, key="diagnostics_by_gender_table")
+                st.dataframe(diagnostics_pivot.applymap(scale_count), key="diagnostics_by_gender_table")
 
 @log_time
 def visualize_manufacturer_medicines(tab, data):
@@ -621,7 +653,7 @@ def visualize_manufacturer_medicines(tab, data):
         if top_15_manufacturers is not None and not top_15_manufacturers.empty:
             # Sort the manufacturers list alphabetically
             top_manufacturers_list = sorted(top_15_manufacturers['manufacturers'].tolist())
-            default_index = top_manufacturers_list.index("LUPIN LTD") if "LUPIN LTD" in top_manufacturers_list else 0
+            default_index = top_manufacturers_list.index("SUN PHARMACEUTICAL INDUSTRIES LTD") if "SUN PHARMACEUTICAL INDUSTRIES LTD" in top_manufacturers_list else 0
 
             # Display manufacturer selection box
             selected_manufacturer = st.selectbox(
@@ -644,23 +676,25 @@ def visualize_manufacturer_medicines(tab, data):
                     )
                     medicine_counts.columns = ['Medicine', 'Count']
 
+                    medicine_counts_scaled = medicine_counts.copy()
+                    medicine_counts_scaled['Count'] = medicine_counts_scaled['Count'].apply(scale_count)
                     col1, col2 = st.columns([60, 40])
 
                     with col1:
                         st.plotly_chart(
-                            create_pie_chart(medicine_counts.head(10), 'Medicine', 'Count',
+                            create_pie_chart(medicine_counts_scaled.head(10), 'Medicine', 'Count',
                                              f"Medicines by {selected_manufacturer}")
                         )
 
                     with col2:
-                        st.dataframe(medicine_counts)
-                        total = medicine_counts['Count'].sum()
+                        st.dataframe(medicine_counts.applymap(scale_count))
+                        total = scale_count(medicine_counts['Count'].sum())
                         col3, col4 = st.columns([1, 1])
                         with col3:
                             st.metric("Total", total)
                         with col4:
                             st.metric("Strike Rate(%)",
-                                      f"{(((total / (data['type'].str.lower().eq('medicine').sum())).round(4)) * 100).round(2)}%")
+                                      f"{((((total / (data['type'].str.lower().eq('medicine').sum())).round(4)) * 100)/SCALE_FACTOR).round(2)}%")
                             st.text("Strike Rate: % of medicines prescribed by this manufacturer out of total.")
                 else:
                     st.warning(f"No data available for the selected manufacturer: {selected_manufacturer}.")
@@ -726,7 +760,8 @@ def manufacturer_comparison_tab(tab, data):
 
         cols = st.columns(2)
         for i, pu in enumerate(selected_uses):
-            dfp = pu_counts[pu_counts['exploded_primary_use']==pu]
+            dfp = pu_counts[pu_counts['exploded_primary_use']==pu].copy()
+            dfp['Count'] = dfp['Count'].apply(scale_count)
             fig2 = px.pie(
                 dfp,
                 names='manufacturers',
@@ -741,7 +776,7 @@ def manufacturer_comparison_tab(tab, data):
         for m in selected_manufacturers:
             st.markdown(f"### {m}")
             mdf = subset[subset['manufacturers']==m]
-            st.metric("Total Rx lines", mdf.shape[0])
+            st.metric("Total Rx lines", scale_count(mdf.shape[0]))
             for pu in selected_uses:
                 st.markdown(f"**{pu}**")
                 dfmu = mdf[mdf['exploded_primary_use']==pu]
@@ -829,8 +864,11 @@ def visualize_market_share_primary_use(tab, data: pd.DataFrame):
             return
 
         # 6) pie + table
+        market_scaled = market.copy()
+        if 'Count' in market_scaled.columns:
+            market_scaled['Count'] = market_scaled['Count'].apply(scale_count)
         fig = px.pie(
-            market.head(20),
+            market_scaled.head(20),
             names='manufacturers',
             values='Share%',
             hole=0.4,
@@ -840,8 +878,8 @@ def visualize_market_share_primary_use(tab, data: pd.DataFrame):
         with c1:
             st.plotly_chart(fig, use_container_width=True)
         with c2:
-            st.dataframe(market)
-            st.metric("Total Rx Lines", total)
+            st.dataframe(market.applymap(scale_count))
+            st.metric("Total Rx Lines", scale_count(total))
 
 
 @log_time
@@ -875,10 +913,10 @@ def visualize_value_comparison(tab, data):
 
         # Display the selected metric as a bar chart
         if toggle_option == 'Total Value':
-            top_20 = manufacturer_comparison.sort_values(by='Total_Value', ascending=False).head(20)
-
+            top_20_scaled = top_20.copy()
+            top_20_scaled['Total_Value'] = top_20_scaled['Total_Value'].apply(scale_count)
             fig = px.bar(
-                top_20,
+                top_20_scaled,
                 x='manufacturers',
                 y='Total_Value',
                 title="Total Value by Manufacturer",
@@ -890,8 +928,10 @@ def visualize_value_comparison(tab, data):
 
         elif toggle_option == 'Average Value':
             top_20 = manufacturer_comparison.sort_values(by='Average_Value', ascending=False).head(20)
+            top_20_scaled = top_20.copy()
+            top_20_scaled['Average_Value'] = top_20_scaled['Average_Value'].apply(scale_count)
             fig = px.bar(
-                top_20,
+                top_20_scaled,
                 x='manufacturers',
                 y='Average_Value',
                 title="Average Value by Manufacturer",
@@ -902,8 +942,10 @@ def visualize_value_comparison(tab, data):
 
         elif toggle_option == 'Patient Count':
             top_20 = manufacturer_comparison.sort_values(by='Patient_Count', ascending=False).head(20)
+            top_20_scaled = top_20.copy()
+            top_20_scaled['Patient_Count'] = top_20_scaled['Patient_Count'].apply(scale_count)
             fig = px.bar(
-                top_20,
+                top_20_scaled,
                 x='manufacturers',
                 y='Patient_Count',
                 title="Patient Count by Manufacturer",
@@ -913,13 +955,14 @@ def visualize_value_comparison(tab, data):
             st.plotly_chart(fig, use_container_width=True)
 
         # Display the data as a table
-        st.dataframe(
-            manufacturer_comparison
-            .sort_values(by='Total_Value', ascending=False).reset_index(drop=True)
-            .assign(
-                Total_Value_Percentage=lambda df: (df['Total_Value'] / df['Total_Value'].sum() * 100).round(2),
-                Patient_Count_Percentage=lambda df: (df['Patient_Count'] / df['Patient_Count'].sum() * 100).round(2))
-        )
+        scaled_df = manufacturer_comparison.copy()
+        for col in ['Total_Value', 'Average_Value', 'Patient_Count']:
+            if col in scaled_df.columns:
+                scaled_df[col] = scaled_df[col].apply(scale_count)
+        scaled_df = scaled_df.sort_values(by='Total_Value', ascending=False).reset_index(drop=True)
+        scaled_df['Total_Value_Percentage'] = (scaled_df['Total_Value'] / scaled_df['Total_Value'].sum() * 100).round(2)
+        scaled_df['Patient_Count_Percentage'] = (scaled_df['Patient_Count'] / scaled_df['Patient_Count'].sum() * 100).round(2)
+        st.dataframe(scaled_df)
 
 @log_time
 def visualize_vitals(tab, data):
@@ -992,7 +1035,7 @@ def visualize_vitals(tab, data):
             # **Visualization for Blood Pressure**
             st.subheader("Blood Pressure Distribution")
             total_data_points = len(vital_data)
-            st.write(f"**Total Data Points Available:** {total_data_points}")
+            st.write(f"**Total Data Points Available:** {scale_count(total_data_points)}")
 
             # **Box Plot - Overall**
             with st.expander("Overall Blood Pressure Distribution"):
@@ -1017,7 +1060,7 @@ def visualize_vitals(tab, data):
                     ]
                 })
                 st.write("Summary Statistics:")
-                st.dataframe(overall_summary)
+                st.dataframe(overall_summary.applymap(scale_count))
 
                 fig_overall = px.box(
                     vital_data.melt(id_vars=['gender', 'age_group'], value_vars=['systolic', 'diastolic'],
@@ -1037,7 +1080,7 @@ def visualize_vitals(tab, data):
                 }).round(2)
 
                 st.write("Gender-wise Summary Statistics:")
-                st.dataframe(gender_summary)
+                st.dataframe(gender_summary.applymap(scale_count))
 
                 fig_gender = px.box(
                     vital_data.melt(id_vars=['gender'],
@@ -1061,7 +1104,7 @@ def visualize_vitals(tab, data):
                 }).round(1)
                 age_summary = pd.DataFrame(age_summary).sort_values(by='age_group').reset_index()
                 st.write("Age-wise Summary Statistics:")
-                st.dataframe(age_summary)
+                st.dataframe(age_summary.applymap(scale_count))
 
                 fig_age = px.box(
                     vital_data.melt(id_vars=['age_group'],
@@ -1087,23 +1130,23 @@ def visualize_vitals(tab, data):
 
             st.subheader("Pulse Rate Distribution")
             total_data_points = len(vital_data)
-            st.write(f"**Total Data Points Available:** {total_data_points}")
+            st.write(f"**Total Data Points Available:** {scale_count(total_data_points)}")
 
             # **Box Plot - Overall**
             with st.expander("Overall Pulse Rate Distribution"):
                 overall_summary = pd.DataFrame({
                     'Metric': ['Count', 'Mean', 'Median', 'Std Dev', 'Min', 'Max'],
                     'Pulse Rate': [
-                        f"{vital_data['value'].count()}",
-                        f"{vital_data['value'].mean():.1f}",
-                        f"{vital_data['value'].median():.1f}",
-                        f"{vital_data['value'].std():.1f}",
-                        f"{vital_data['value'].min():.1f}",
-                        f"{vital_data['value'].max():.1f}"
+                        f"{scale_count(vital_data['value'].count())}",
+                        f"{scale_count(vital_data['value'].mean()):.1f}",
+                        f"{scale_count(vital_data['value'].median()):.1f}",
+                        f"{scale_count(vital_data['value'].std()):.1f}",
+                        f"{scale_count(vital_data['value'].min()):.1f}",
+                        f"{scale_count(vital_data['value'].max()):.1f}"
                     ]
                 })
                 st.write("Summary Statistics:")
-                st.dataframe(overall_summary)
+                st.dataframe(overall_summary.applymap(scale_count))
 
                 fig_pulse = px.box(
                     vital_data,
@@ -1118,9 +1161,8 @@ def visualize_vitals(tab, data):
                 gender_summary = vital_data.groupby('gender').agg({
                     'value': ['count', 'mean', 'median', 'std', 'min', 'max']
                 }).round(2)
-
                 st.write("Gender-wise Summary Statistics:")
-                st.dataframe(gender_summary)
+                st.dataframe(gender_summary.applymap(scale_count))
 
                 fig_pulse_gender = px.box(
                     vital_data,
@@ -1140,7 +1182,7 @@ def visualize_vitals(tab, data):
                 }).round(1)
                 age_summary = pd.DataFrame(age_summary).reset_index()
                 st.write("Age-wise Summary Statistics:")
-                st.dataframe(age_summary)
+                st.dataframe(age_summary.applymap(scale_count))
 
                 fig_pulse_age = px.box(
                     vital_data,
@@ -1164,7 +1206,7 @@ def visualize_vitals(tab, data):
 
             st.subheader("Weight Distribution")
             total_data_points = len(vital_data)
-            st.write(f"**Total Data Points Available:** {total_data_points}")
+            st.write(f"**Total Data Points Available:** {scale_count(total_data_points)}")
 
             # **Box Plot - Overall**
             with st.expander("Overall Weight Distribution"):
@@ -1173,7 +1215,7 @@ def visualize_vitals(tab, data):
                 }).round(2).rename(columns={'value': 'Weight (kg)'}).reset_index().rename(columns={'index': 'Metric'})
 
                 st.write("Summary Statistics:")
-                st.dataframe(overall_summary)
+                st.dataframe(overall_summary.applymap(scale_count))
 
                 fig_weight = px.box(
                     vital_data,
@@ -1190,7 +1232,7 @@ def visualize_vitals(tab, data):
                 }).round(2).rename(columns={'value': 'Weight (kg)'})
 
                 st.write("Gender-wise Summary Statistics:")
-                st.dataframe(gender_summary)
+                st.dataframe(gender_summary.applymap(scale_count))
 
                 fig_weight_gender = px.box(
                     vital_data,
@@ -1210,7 +1252,7 @@ def visualize_vitals(tab, data):
                 }).round(2).rename(columns={'value': 'Weight (kg)'})
                 age_summary = pd.DataFrame(age_summary).reset_index()
                 st.write("Age-wise Summary Statistics:")
-                st.dataframe(age_summary)
+                st.dataframe(age_summary.applymap(scale_count))
 
                 fig_weight_age = px.box(
                     vital_data,
@@ -1247,23 +1289,23 @@ def visualize_vitals(tab, data):
 
             st.subheader("Oxygen Saturation (SpO2) Distribution")
             total_data_points = len(vital_data)
-            st.write(f"**Total Data Points Available:** {total_data_points}")
+            st.write(f"**Total Data Points Available:** {scale_count(total_data_points)}")
 
             # **Box Plot - Overall**
             with st.expander("Overall SpO2 Distribution"):
                 overall_summary = pd.DataFrame({
                     'Metric': ['Count', 'Mean', 'Median', 'Std Dev', 'Min', 'Max'],
                     'SpO2 (%)': [
-                        f"{vital_data['value'].count()}",
-                        f"{vital_data['value'].mean():.1f}",
-                        f"{vital_data['value'].median():.1f}",
-                        f"{vital_data['value'].std():.1f}",
-                        f"{vital_data['value'].min():.1f}",
-                        f"{vital_data['value'].max():.1f}"
+                        f"{scale_count(vital_data['value'].count())}",
+                        f"{scale_count(vital_data['value'].mean()):.1f}",
+                        f"{scale_count(vital_data['value'].median()):.1f}",
+                        f"{scale_count(vital_data['value'].std()):.1f}",
+                        f"{scale_count(vital_data['value'].min()):.1f}",
+                        f"{scale_count(vital_data['value'].max()):.1f}"
                     ]
                 })
                 st.write("Summary Statistics:")
-                st.dataframe(overall_summary)
+                st.dataframe(overall_summary.applymap(scale_count))
 
                 fig_spo2 = px.box(
                     vital_data,
@@ -1280,7 +1322,7 @@ def visualize_vitals(tab, data):
                 }).round(2)
 
                 st.write("Gender-wise Summary Statistics:")
-                st.dataframe(gender_summary)
+                st.dataframe(gender_summary.applymap(scale_count))
 
                 fig_spo2_gender = px.box(
                     vital_data,
@@ -1300,7 +1342,7 @@ def visualize_vitals(tab, data):
                 }).round(1)
                 age_summary = pd.DataFrame(age_summary).reset_index()
                 st.write("Age-wise Summary Statistics:")
-                st.dataframe(age_summary)
+                st.dataframe(age_summary.applymap(scale_count))
 
                 fig_spo2_age = px.box(
                     vital_data,
@@ -1429,7 +1471,7 @@ def main():
     with col2:
         logo_path = 'logo.png'
 
-    path = 'data/demo_half_data.csv'
+    path = 'data/demo_half_data_50pct_doctors.csv'
     data = load_data(path)
     cleaned_data = clean_medical_data(data)
     st.sidebar.title("Rx Analytics Filters")
