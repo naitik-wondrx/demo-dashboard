@@ -1508,7 +1508,7 @@ def main():
         title_placeholder = st.empty()
     with col2:
         logo_path = 'logo.png'
-        st.image(logo_path, use_column_width=True)
+        st.image(logo_path, use_container_width=True)
 
     path = 'data/demo_half_data.csv'
     data = load_data(path)
