@@ -18,11 +18,13 @@ from streamlit import session_state as state
 
 SCALE_FACTOR = 47
 
+
 def scale_count(x):
     try:
         return int(x) * SCALE_FACTOR
     except Exception:
         return x
+
 
 def log_time(func):
     """Decorator to log start, end, and duration of a function call."""
@@ -142,6 +144,7 @@ def aggregate_geo_data(data, group_by_column, count_column):
     aggregated_data = aggregated_data.sort_values(by='count', ascending=False)
     return aggregated_data
 
+
 @log_time
 @st.cache_data
 def create_bar_chart(data, x_column, y_column, title=None, orientation='v', color=None, text=None):
@@ -156,6 +159,7 @@ def create_bar_chart(data, x_column, y_column, title=None, orientation='v', colo
         height=700,
         text=text,
     )
+
 
 @log_time
 @st.cache_data
@@ -173,6 +177,7 @@ def prepare_demographics(data):
     return age_group_counts.sort_values(by='count', ascending=False), gender_counts.sort_values(by='count',
                                                                                                 ascending=False)
 
+
 @log_time
 @st.cache_data
 def create_pie_chart(data, names_column, values_column, title=None, color_map=None):
@@ -186,6 +191,7 @@ def create_pie_chart(data, names_column, values_column, title=None, color_map=No
         color_discrete_map=color_map  # Apply the color mapping
     )
 
+
 @log_time
 @st.cache_data
 def get_top_items(data, item_type):
@@ -198,6 +204,7 @@ def get_top_items(data, item_type):
     )
     top_items.columns = [item_type, 'count']
     return top_items
+
 
 @log_time
 @st.cache_data
@@ -216,6 +223,7 @@ def analyze_observation_by_gender(data):
 
     return observation_gender
 
+
 @log_time
 @st.cache_data
 def analyze_diagnostics_by_gender(data):
@@ -232,6 +240,7 @@ def analyze_diagnostics_by_gender(data):
     diagnostics_gender = diagnostics_gender.sort_values(by='total', ascending=False).drop('total', axis=1)
 
     return diagnostics_gender
+
 
 @log_time
 @st.cache_data
@@ -282,6 +291,7 @@ def analyze_pharma_data(filtered_data):
 
     return top_manufacturers, top_primary_uses
 
+
 @log_time
 def visualize_data_types(tab, data):
     with tab:
@@ -310,10 +320,13 @@ def visualize_data_types(tab, data):
                 speciality_counts_scaled['Count'] = speciality_counts_scaled['Count'].apply(scale_count)
                 st.plotly_chart(create_pie_chart(speciality_counts_scaled, 'Speciality', 'Count'))
             with col2:
-                speciality_counts_scaled = speciality_counts.sort_values(by='Count', ascending=False).reset_index(drop=True)
-                st.dataframe(speciality_counts.sort_values(by='Count', ascending=False).reset_index(drop=True).applymap(scale_count))
+                speciality_counts_scaled = speciality_counts.sort_values(by='Count', ascending=False).reset_index(
+                    drop=True)
+                st.dataframe(speciality_counts.sort_values(by='Count', ascending=False).reset_index(drop=True).applymap(
+                    scale_count))
                 total = speciality_counts['Count'].sum()
                 st.metric("Total", scale_count(total))
+
 
 @log_time
 def preprocess_column(data, column_name):
@@ -345,6 +358,7 @@ def _explode_geo(df: pd.DataFrame, col: str) -> pd.DataFrame:
     tmp = tmp.melt(id_vars=['id', 'doctor_id'], value_name=col, var_name='_').drop(columns=['_'])
     tmp[col] = tmp[col].str.strip()
     return tmp[tmp[col] != '']
+
 
 @log_time
 def visualize_geographical_distribution(tab, data: pd.DataFrame):
@@ -394,6 +408,7 @@ def visualize_geographical_distribution(tab, data: pd.DataFrame):
                     st.dataframe(df_counts.reset_index(drop=True), key=f"{key}_table")
                     st.metric("Total", scale_count(df_counts['count'].sum()))
 
+
 @log_time
 def visualize_patient_demographics(tab, data):
     with tab:
@@ -406,7 +421,9 @@ def visualize_patient_demographics(tab, data):
             with col1:
                 st.plotly_chart(create_pie_chart(age_group_counts, 'age_group', 'count'))
             with col2:
-                st.dataframe(age_group_counts.sort_values(by='age_group', ascending=True).reset_index(drop=True).applymap(scale_count))
+                st.dataframe(
+                    age_group_counts.sort_values(by='age_group', ascending=True).reset_index(drop=True).applymap(
+                        scale_count))
                 total = age_group_counts['count'].sum()
                 st.metric("Total", scale_count(total))
 
@@ -419,6 +436,7 @@ def visualize_patient_demographics(tab, data):
                 st.dataframe(gender_counts.applymap(scale_count))
                 total = gender_counts['count'].sum()
                 st.metric("Total", scale_count(total))
+
 
 @log_time
 @st.cache_data
@@ -435,6 +453,7 @@ def _explode_primary_uses(df: pd.DataFrame) -> pd.DataFrame:
     df2['primary_use'] = df2['primary_use'].str.strip().str.upper()
     # Drop blanks
     return df2[df2['primary_use'] != ""]
+
 
 @log_time
 def visualize_medicines(tab, data: pd.DataFrame):
@@ -503,6 +522,7 @@ def visualize_medicines(tab, data: pd.DataFrame):
                     st.dataframe(counts_scaled)
                     st.metric("Total", scale_count(counts['count'].sum()))
 
+
 @log_time
 def visualize_pharma_analytics(tab, filtered_medical_data):
     with tab:
@@ -542,6 +562,7 @@ def visualize_pharma_analytics(tab, filtered_medical_data):
             else:
                 st.warning("No data available for Top Primary Uses.")
 
+
 @log_time
 def visualize_observations(tab, data):
     data = data[data['type'].str.lower() == 'observation'].copy()
@@ -558,7 +579,8 @@ def visualize_observations(tab, data):
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.plotly_chart(
-                    create_bar_chart(top_observations_scaled.head(20), 'count', 'Observation', orientation='h', text='count',
+                    create_bar_chart(top_observations_scaled.head(20), 'count', 'Observation', orientation='h',
+                                     text='count',
                                      color='count'))
             with col2:
                 st.dataframe(top_observations.applymap(scale_count))
@@ -574,8 +596,8 @@ def visualize_observations(tab, data):
             observations_pivot = observations_pivot.sort_values(by='Total', ascending=False)
 
             obs_pivot_scaled = observations_pivot.head(20).reset_index().drop(columns='Total').melt(id_vars='value',
-                                                                                         var_name='gender',
-                                                                                         value_name='count')
+                                                                                                    var_name='gender',
+                                                                                                    value_name='count')
             obs_pivot_scaled['count'] = obs_pivot_scaled['count'].apply(scale_count)
             col1, col2 = st.columns([70, 30])
             with col1:
@@ -589,6 +611,7 @@ def visualize_observations(tab, data):
                 ))
             with col2:
                 st.dataframe(observations_pivot.applymap(scale_count))
+
 
 @log_time
 def visualize_diagnostics(tab, data):
@@ -605,7 +628,8 @@ def visualize_diagnostics(tab, data):
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.plotly_chart(
-                    create_bar_chart(top_diagnostics_scaled.head(20), 'count', 'Diagnostic', orientation='h', text='count',
+                    create_bar_chart(top_diagnostics_scaled.head(20), 'count', 'Diagnostic', orientation='h',
+                                     text='count',
                                      color='count'),
                     use_container_width=True,
                     key="top_diagnostics_chart"
@@ -624,8 +648,8 @@ def visualize_diagnostics(tab, data):
             diagnostics_pivot = diagnostics_pivot.sort_values(by='Total', ascending=False)
 
             diag_pivot_scaled = diagnostics_pivot.head(15).reset_index().drop(columns='Total').melt(id_vars='value',
-                                                                                            var_name='gender',
-                                                                                            value_name='count')
+                                                                                                    var_name='gender',
+                                                                                                    value_name='count')
             diag_pivot_scaled['count'] = diag_pivot_scaled['count'].apply(scale_count)
             col1, col2 = st.columns([70, 30])
             with col1:
@@ -644,6 +668,7 @@ def visualize_diagnostics(tab, data):
             with col2:
                 st.dataframe(diagnostics_pivot.applymap(scale_count), key="diagnostics_by_gender_table")
 
+
 @log_time
 def visualize_manufacturer_medicines(tab, data):
     with tab:
@@ -653,7 +678,8 @@ def visualize_manufacturer_medicines(tab, data):
         if top_15_manufacturers is not None and not top_15_manufacturers.empty:
             # Sort the manufacturers list alphabetically
             top_manufacturers_list = sorted(top_15_manufacturers['manufacturers'].tolist())
-            default_index = top_manufacturers_list.index("SUN PHARMACEUTICAL INDUSTRIES LTD") if "SUN PHARMACEUTICAL INDUSTRIES LTD" in top_manufacturers_list else 0
+            default_index = top_manufacturers_list.index(
+                "SUN PHARMACEUTICAL INDUSTRIES LTD") if "SUN PHARMACEUTICAL INDUSTRIES LTD" in top_manufacturers_list else 0
 
             # Display manufacturer selection box
             selected_manufacturer = st.selectbox(
@@ -694,12 +720,13 @@ def visualize_manufacturer_medicines(tab, data):
                             st.metric("Total", total)
                         with col4:
                             st.metric("Strike Rate(%)",
-                                      f"{((((total / (data['type'].str.lower().eq('medicine').sum())).round(4)) * 100)/SCALE_FACTOR).round(2)}%")
+                                      f"{((((total / (data['type'].str.lower().eq('medicine').sum())).round(4)) * 100) / SCALE_FACTOR).round(2)}%")
                             st.text("Strike Rate: % of medicines prescribed by this manufacturer out of total.")
                 else:
                     st.warning(f"No data available for the selected manufacturer: {selected_manufacturer}.")
         else:
             st.warning("No manufacturer data available.")
+
 
 @log_time
 def manufacturer_comparison_tab(tab, data):
@@ -732,7 +759,7 @@ def manufacturer_comparison_tab(tab, data):
         subset = exploded.loc[
             exploded['manufacturers'].isin(selected_manufacturers) &
             exploded['exploded_primary_use'].isin(selected_uses)
-        ]
+            ]
 
         # 5) total meds per manufacturer
         total_counts = (
@@ -753,14 +780,14 @@ def manufacturer_comparison_tab(tab, data):
         # 6) one pie per selected primary use
         pu_counts = (
             subset
-            .groupby(['exploded_primary_use','manufacturers'])['value']
+            .groupby(['exploded_primary_use', 'manufacturers'])['value']
             .count()
             .reset_index(name='Count')
         )
 
         cols = st.columns(2)
         for i, pu in enumerate(selected_uses):
-            dfp = pu_counts[pu_counts['exploded_primary_use']==pu].copy()
+            dfp = pu_counts[pu_counts['exploded_primary_use'] == pu].copy()
             dfp['Count'] = dfp['Count'].apply(scale_count)
             fig2 = px.pie(
                 dfp,
@@ -775,33 +802,33 @@ def manufacturer_comparison_tab(tab, data):
         # 7) detailed table per manufacturer × use
         for m in selected_manufacturers:
             st.markdown(f"### {m}")
-            mdf = subset[subset['manufacturers']==m]
+            mdf = subset[subset['manufacturers'] == m]
             st.metric("Total Rx lines", scale_count(mdf.shape[0]))
             for pu in selected_uses:
                 st.markdown(f"**{pu}**")
-                dfmu = mdf[mdf['exploded_primary_use']==pu]
+                dfmu = mdf[mdf['exploded_primary_use'] == pu]
                 if dfmu.empty:
                     st.write("No data")
                 else:
                     metrics = (
                         dfmu.groupby('value')
-                            .agg(
-                                Medicine_Count=('value','count'),
-                                Unique_Patients=('value','nunique')
-                            )
-                            .reset_index()
+                        .agg(
+                            Medicine_Count=('value', 'count'),
+                            Unique_Patients=('value', 'nunique')
+                        )
+                        .reset_index()
                     )
                     metrics['% Medicine Count'] = (
-                        metrics['Medicine_Count']
-                        / metrics['Medicine_Count'].sum() * 100
+                            metrics['Medicine_Count']
+                            / metrics['Medicine_Count'].sum() * 100
                     ).round(2)
                     st.dataframe(
                         metrics
                         .sort_values('Medicine_Count', ascending=False)
                         .rename(columns={
-                            'value':'Medicine',
-                            'Medicine_Count':'Count',
-                            'Unique_Patients':'Patients'
+                            'value': 'Medicine',
+                            'Medicine_Count': 'Count',
+                            'Unique_Patients': 'Patients'
                         })
                     )
 
@@ -819,6 +846,7 @@ def _explode_primary_use(data: pd.DataFrame) -> pd.DataFrame:
     df = df.explode('primary_use')
     df['primary_use'] = df['primary_use'].str.strip().str.upper()
     return df[df['primary_use'] != ""].rename(columns={'primary_use': 'exploded_primary_use'})
+
 
 @log_time
 def visualize_market_share_primary_use(tab, data: pd.DataFrame):
@@ -961,8 +989,10 @@ def visualize_value_comparison(tab, data):
                 scaled_df[col] = scaled_df[col].apply(scale_count)
         scaled_df = scaled_df.sort_values(by='Total_Value', ascending=False).reset_index(drop=True)
         scaled_df['Total_Value_Percentage'] = (scaled_df['Total_Value'] / scaled_df['Total_Value'].sum() * 100).round(2)
-        scaled_df['Patient_Count_Percentage'] = (scaled_df['Patient_Count'] / scaled_df['Patient_Count'].sum() * 100).round(2)
+        scaled_df['Patient_Count_Percentage'] = (
+                    scaled_df['Patient_Count'] / scaled_df['Patient_Count'].sum() * 100).round(2)
         st.dataframe(scaled_df)
+
 
 @log_time
 def visualize_vitals(tab, data):
@@ -1357,6 +1387,7 @@ def visualize_vitals(tab, data):
         else:
             st.warning(f"{selected_vital} sparse data")
 
+
 @log_time
 @st.cache_data
 def get_unique_states(state_series: pd.Series) -> list[str]:
@@ -1372,6 +1403,7 @@ def get_unique_states(state_series: pd.Series) -> list[str]:
     df = df[df != ""]  # drop empty strings
     return sorted(df.unique().tolist())
 
+
 @log_time
 def get_state_filter(medical_data: pd.DataFrame):
     states = get_unique_states(medical_data['state_name'])
@@ -1381,6 +1413,7 @@ def get_state_filter(medical_data: pd.DataFrame):
         default=state.get("state_filter", []),
         key="state_filter"
     )
+
 
 @log_time
 def get_city_filter(medical_data, state_filter):
@@ -1402,6 +1435,7 @@ def get_city_filter(medical_data, state_filter):
         default=state.get("city_filter", []),
         key="city_filter"
     )
+
 
 @log_time
 def get_pincode_filter(medical_data, state_filter, city_filter):
@@ -1428,6 +1462,7 @@ def get_pincode_filter(medical_data, state_filter, city_filter):
         key="pincode_filter"
     )
 
+
 @log_time
 def get_speciality_filter(medical_data, pincode_filter):
     filtered_speciality_data = medical_data.copy()
@@ -1445,12 +1480,14 @@ def get_speciality_filter(medical_data, pincode_filter):
         key="speciality_filter"
     )
 
+
 @log_time
 def get_client_filter(data):
     """Extracts unique client names and provides a multi-select filter in Streamlit."""
     unique_clients = sorted(data['client'].dropna().unique())  # Get unique non-null clients
     selected_clients = st.sidebar.multiselect("Select Client(s)", unique_clients)
     return selected_clients
+
 
 @log_time
 def get_project_filter(data, client_filter):
@@ -1460,6 +1497,7 @@ def get_project_filter(data, client_filter):
     unique_projects = sorted(data['project'].dropna().unique())  # Get unique non-null projects
     selected_projects = st.sidebar.multiselect("Select Project(s)", unique_projects)
     return selected_projects
+
 
 @log_time
 def main():
@@ -1507,14 +1545,18 @@ def main():
         # Use session state to set the default values for the date inputs
         start_date = st.date_input(
             "Start Date",
-            value=state.get("start_date", start_date_val).date() if isinstance(state.get("start_date"), datetime) else state.get("start_date", start_date_val),
+            value=state.get("start_date", start_date_val).date() if isinstance(state.get("start_date"),
+                                                                               datetime) else state.get("start_date",
+                                                                                                        start_date_val),
             key="start_date",
             max_value=datetime.today().date(),
             format="DD-MM-YYYY",
         )
         end_date = st.date_input(
             "End Date",
-            value=state.get("end_date", end_date_val).date() if isinstance(state.get("end_date"), datetime) else state.get("end_date", end_date_val),
+            value=state.get("end_date", end_date_val).date() if isinstance(state.get("end_date"),
+                                                                           datetime) else state.get("end_date",
+                                                                                                    end_date_val),
             key="end_date",
             min_value=start_date,
             max_value=datetime.today().date(),
@@ -1523,7 +1565,10 @@ def main():
         apply_filters_btn = st.form_submit_button("Apply")
 
     # --- Only update filters when Apply is pressed ---
-    if apply_filters_btn or not all(k in state for k in ["applied_state_filter", "applied_city_filter", "applied_pincode_filter", "applied_speciality_filter", "applied_client_filter", "applied_project_filter", "applied_start_date", "applied_end_date"]):
+    if apply_filters_btn or not all(k in state for k in
+                                    ["applied_state_filter", "applied_city_filter", "applied_pincode_filter",
+                                     "applied_speciality_filter", "applied_client_filter", "applied_project_filter",
+                                     "applied_start_date", "applied_end_date"]):
         state.applied_state_filter = state_filter
         state.applied_city_filter = city_filter
         state.applied_pincode_filter = pincode_filter
