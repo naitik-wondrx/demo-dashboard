@@ -65,16 +65,59 @@ def json_to_dataframe(file_path):
 
 @log_time
 @st.cache_data
-def clean_medical_data(data):
-    data['gender'] = data['gender'].replace("", "Unknown")
-    data['value'] = data['value'].str.lower().apply(lambda x: "pain in abdomen" if "pain in abd" in str(x) else x)
-    replacements = {
-        'cbc': 'cbc',
-        'urine': 'urine',
-        'hbsag': 'hbsag',
-    }
-    for key, value in replacements.items():
-        data['value'] = data['value'].str.lower().apply(lambda x: key if value in str(x) else x)
+def clean_medical_data(data: pd.DataFrame) -> pd.DataFrame:
+    # 1. Ensure MRP columns exist
+    for col in ("min_mrp", "max_mrp"):
+        if col not in data.columns:
+            data[col] = 0.0
+
+    # 2. Compute average_mrp
+    data["average_mrp"] = (
+        data[["min_mrp", "max_mrp"]]
+        .apply(pd.to_numeric, errors="coerce")
+        .fillna(0)
+        .mean(axis=1)
+        .round(2)
+    )
+
+    # 3. Normalize gender
+    if "gender" in data.columns:
+        data["gender"] = (
+            data["gender"]
+            .fillna("")
+            .astype(str)
+            .replace("", "Unknown")
+        )
+    else:
+        data["gender"] = "Unknown"
+
+    # 4. Build clean, all-string, lowercase 'value'
+    value_series = (
+        data
+        .get("value", pd.Series([""] * len(data)))
+        .fillna("")
+        .apply(lambda x: str(x).lower())
+    )
+
+    # 5. Specific phrase normalization
+    value_series = value_series.apply(
+        lambda x: "pain in abdomen" if "pain in abd" in x else x
+    )
+
+    # 6. Keyword replacements
+    replacements = {"cbc": "cbc", "urine": "urine", "hbsag": "hbsag"}
+    value_series = value_series.apply(
+        lambda x: next((k for k in replacements if k in x), x)
+    )
+
+    # 7. Assign back
+    data["value"] = value_series
+
+    # 8. Ensure geographic columns exist
+    for col in ("state_name", "city", "pincode"):
+        if col not in data.columns:
+            data[col] = ""
+
     return data
 
 
@@ -989,7 +1032,7 @@ def visualize_value_comparison(tab, data):
         scaled_df = scaled_df.sort_values(by='Total_Value', ascending=False).reset_index(drop=True)
         scaled_df['Total_Value_Percentage'] = (scaled_df['Total_Value'] / scaled_df['Total_Value'].sum() * 100).round(2)
         scaled_df['Patient_Count_Percentage'] = (
-                    scaled_df['Patient_Count'] / scaled_df['Patient_Count'].sum() * 100).round(2)
+                scaled_df['Patient_Count'] / scaled_df['Patient_Count'].sum() * 100).round(2)
         st.dataframe(scaled_df)
 
 
@@ -1055,7 +1098,8 @@ def visualize_vitals(tab, data):
                 return
 
             # Split into systolic and diastolic
-            vital_data[['systolic', 'diastolic']] = vital_data['value'].str.split('/', expand=True).astype(int)
+            # Convert to float to handle decimal values (don't convert to int to preserve decimal points)
+            vital_data[['systolic', 'diastolic']] = vital_data['value'].str.split('/', expand=True).astype(float)
 
             # Remove outliers
             remove_outliers(vital_data, 'systolic')
