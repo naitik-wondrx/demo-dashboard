@@ -77,6 +77,7 @@ def clean_medical_data(data):
         data['value'] = data['value'].str.lower().apply(lambda x: key if value in str(x) else x)
     return data
 
+
 @log_time
 @st.cache_data
 def apply_filters(data, state_filter=None, city_filter=None, pincode_filter=None, speciality_filter=None,
