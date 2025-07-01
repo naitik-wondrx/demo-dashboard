@@ -84,18 +84,18 @@ def clean_medical_data(data: pd.DataFrame) -> pd.DataFrame:
     if "gender" in data.columns:
         data["gender"] = (
             data["gender"]
-            .fillna("")  # NaN → ""
-            .astype(str)  # everything → str
+            .fillna("")
+            .astype(str)
             .replace("", "Unknown")
         )
     else:
         data["gender"] = "Unknown"
 
-    # 4. Build a clean, all-string, lowercase 'value' series
+    # 4. Build clean, all-string, lowercase 'value'
     value_series = (
         data
         .get("value", pd.Series([""] * len(data)))
-        .fillna("")  # NaN → ""
+        .fillna("")
         .apply(lambda x: str(x).lower())
     )
 
@@ -106,17 +106,17 @@ def clean_medical_data(data: pd.DataFrame) -> pd.DataFrame:
 
     # 6. Keyword replacements
     replacements = {"cbc": "cbc", "urine": "urine", "hbsag": "hbsag"}
-
-    def replace_kw(x: str) -> str:
-        for key in replacements:
-            if key in x:
-                return key
-        return x
-
-    value_series = value_series.apply(replace_kw)
+    value_series = value_series.apply(
+        lambda x: next((k for k in replacements if k in x), x)
+    )
 
     # 7. Assign back
     data["value"] = value_series
+
+    # 8. Ensure geographic columns exist
+    for col in ("state_name", "city", "pincode"):
+        if col not in data.columns:
+            data[col] = ""
 
     return data
 
