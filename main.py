@@ -66,7 +66,6 @@ def json_to_dataframe(file_path):
 @log_time
 @st.cache_data
 def clean_medical_data(data):
-    data['average_mrp'] = data[['min_mrp', 'max_mrp']].mean(axis=1).round(2)
     data['gender'] = data['gender'].replace("", "Unknown")
     data['value'] = data['value'].str.lower().apply(lambda x: "pain in abdomen" if "pain in abd" in str(x) else x)
     replacements = {
@@ -922,8 +921,8 @@ def visualize_value_comparison(tab, data):
         manufacturer_comparison = (
             data.groupby('manufacturers')
             .agg(
-                Total_Value=('average_mrp', 'sum'),  # Replace with relevant column
-                Average_Value=('average_mrp', 'mean'),  # Replace with relevant column
+                Total_Value=('max_mrp', 'sum'),  # Replace with relevant column
+                Average_Value=('max_mrp', 'mean'),  # Replace with relevant column
                 Patient_Count=('id', 'nunique')
             )
             .reset_index()
