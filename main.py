@@ -66,12 +66,12 @@ def json_to_dataframe(file_path):
 @log_time
 @st.cache_data
 def clean_medical_data(data):
-    # 1. Ensure min_mrp/max_mrp exist
+    # Ensure min/max columns exist
     for col in ("min_mrp", "max_mrp"):
         if col not in data.columns:
             data[col] = 0.0
 
-    # 2. Compute average_mrp
+    # Compute average_mrp
     data["average_mrp"] = (
         data[["min_mrp", "max_mrp"]]
         .apply(pd.to_numeric, errors="coerce")
@@ -80,39 +80,35 @@ def clean_medical_data(data):
         .round(2)
     )
 
-    # 3. Normalize gender (or fill in entirely)
+    # Normalize gender
     if "gender" in data.columns:
         data["gender"] = (
             data["gender"]
-            .fillna("")        # convert NaN → ""
-            .astype(str)       # ensure string
+            .fillna("")        # NaN → ""
+            .astype(str)       # everything → str
             .replace("", "Unknown")
         )
     else:
         data["gender"] = "Unknown"
 
-    # 4. Safely lowercase & clean 'value'
+    # Safely stringify & lowercase EVERYTHING in 'value'
     data["value"] = (
-        data.get("value", pd.Series(dtype=str))
-        .fillna("")
-        .astype(str)
-        .str.lower()
+        data
+        .get("value", pd.Series(dtype=str))
+        .fillna("")           # NaN → ""
+        .apply(lambda x: str(x).lower())
     )
 
-    # 5. Specific phrase normalization
+    # Normalize the specific phrase
     data["value"] = data["value"].apply(
         lambda x: "pain in abdomen" if "pain in abd" in x else x
     )
 
-    # 6. Keyword replacements
+    # Keyword replacements
     replacements = {"cbc": "cbc", "urine": "urine", "hbsag": "hbsag"}
-    def replace_kw(x):
-        for k, kw in replacements.items():
-            if kw in x:
-                return k
-        return x
-
-    data["value"] = data["value"].apply(replace_kw)
+    data["value"] = data["value"].apply(
+        lambda x: next((k for k, kw in replacements.items() if kw in x), x)
+    )
 
     return data
 
@@ -1094,8 +1090,8 @@ def visualize_vitals(tab, data):
                 return
 
             # Split into systolic and diastolic
-            # First convert to float to handle decimal values, then to int
-            vital_data[['systolic', 'diastolic']] = vital_data['value'].str.split('/', expand=True).astype(float).astype(int)
+            # Convert to float to handle decimal values (don't convert to int to preserve decimal points)
+            vital_data[['systolic', 'diastolic']] = vital_data['value'].str.split('/', expand=True).astype(float)
 
             # Remove outliers
             remove_outliers(vital_data, 'systolic')
