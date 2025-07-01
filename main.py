@@ -65,13 +65,13 @@ def json_to_dataframe(file_path):
 
 @log_time
 @st.cache_data
-def clean_medical_data(data):
-    # Ensure min/max columns exist
+def clean_medical_data(data: pd.DataFrame) -> pd.DataFrame:
+    # 1. Ensure MRP columns exist
     for col in ("min_mrp", "max_mrp"):
         if col not in data.columns:
             data[col] = 0.0
 
-    # Compute average_mrp
+    # 2. Compute average_mrp
     data["average_mrp"] = (
         data[["min_mrp", "max_mrp"]]
         .apply(pd.to_numeric, errors="coerce")
@@ -80,35 +80,43 @@ def clean_medical_data(data):
         .round(2)
     )
 
-    # Normalize gender
+    # 3. Normalize gender
     if "gender" in data.columns:
         data["gender"] = (
             data["gender"]
-            .fillna("")        # NaN → ""
-            .astype(str)       # everything → str
+            .fillna("")  # NaN → ""
+            .astype(str)  # everything → str
             .replace("", "Unknown")
         )
     else:
         data["gender"] = "Unknown"
 
-    # Safely stringify & lowercase EVERYTHING in 'value'
-    data["value"] = (
+    # 4. Build a clean, all-string, lowercase 'value' series
+    value_series = (
         data
-        .get("value", pd.Series(dtype=str))
-        .fillna("")           # NaN → ""
+        .get("value", pd.Series([""] * len(data)))
+        .fillna("")  # NaN → ""
         .apply(lambda x: str(x).lower())
     )
 
-    # Normalize the specific phrase
-    data["value"] = data["value"].apply(
+    # 5. Specific phrase normalization
+    value_series = value_series.apply(
         lambda x: "pain in abdomen" if "pain in abd" in x else x
     )
 
-    # Keyword replacements
+    # 6. Keyword replacements
     replacements = {"cbc": "cbc", "urine": "urine", "hbsag": "hbsag"}
-    data["value"] = data["value"].apply(
-        lambda x: next((k for k, kw in replacements.items() if kw in x), x)
-    )
+
+    def replace_kw(x: str) -> str:
+        for key in replacements:
+            if key in x:
+                return key
+        return x
+
+    value_series = value_series.apply(replace_kw)
+
+    # 7. Assign back
+    data["value"] = value_series
 
     return data
 
@@ -1024,7 +1032,7 @@ def visualize_value_comparison(tab, data):
         scaled_df = scaled_df.sort_values(by='Total_Value', ascending=False).reset_index(drop=True)
         scaled_df['Total_Value_Percentage'] = (scaled_df['Total_Value'] / scaled_df['Total_Value'].sum() * 100).round(2)
         scaled_df['Patient_Count_Percentage'] = (
-                    scaled_df['Patient_Count'] / scaled_df['Patient_Count'].sum() * 100).round(2)
+                scaled_df['Patient_Count'] / scaled_df['Patient_Count'].sum() * 100).round(2)
         st.dataframe(scaled_df)
 
 
