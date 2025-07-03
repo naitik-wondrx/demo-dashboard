@@ -1528,18 +1528,6 @@ def main():
         col1, col2 = st.columns(2)
         start_date_val = datetime(2020, 1, 1)
         end_date_val = datetime.today()
-        # Add session state keys for each button
-        if "current_fy" not in state:
-            state.current_fy = False
-        if "previous_month" not in state:
-            state.previous_month = False
-
-        quick_range = st.radio(
-            "Quick Date Range",
-            options=["Custom", "Current FY", "Previous Month", "Year To Date", "Previous Week"],
-            index=0,
-            horizontal=False
-        )
 
         # Use session state to set the default values for the date inputs
         start_date = st.date_input(
