@@ -678,7 +678,7 @@ def visualize_manufacturer_medicines(tab, data):
             # Sort the manufacturers list alphabetically
             top_manufacturers_list = sorted(top_15_manufacturers['manufacturers'].tolist())
             default_index = top_manufacturers_list.index(
-                "SUN PHARMACEUTICAL INDUSTRIES LTD") if "SUN PHARMACEUTICAL INDUSTRIES LTD" in top_manufacturers_list else 0
+                "ZYDUS CADILA") if "ZYDUS CADILA" in top_manufacturers_list else 0
 
             # Display manufacturer selection box
             selected_manufacturer = st.selectbox(
