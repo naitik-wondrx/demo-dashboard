@@ -759,7 +759,6 @@ def manufacturer_comparison_tab(tab, data):
             exploded['manufacturers'].isin(selected_manufacturers) &
             exploded['exploded_primary_use'].isin(selected_uses)
             ]
-
         # 5) total meds per manufacturer
         total_counts = (
             subset
@@ -767,6 +766,8 @@ def manufacturer_comparison_tab(tab, data):
             .count()
             .reset_index(name='Total Medicines')
         )
+        total_counts = total_counts.apply(scale_count)
+
         fig = px.pie(
             total_counts,
             names='manufacturers',
@@ -802,7 +803,6 @@ def manufacturer_comparison_tab(tab, data):
         for m in selected_manufacturers:
             st.markdown(f"### {m}")
             mdf = subset[subset['manufacturers'] == m]
-            st.metric("Total Rx lines", scale_count(mdf.shape[0]))
             for pu in selected_uses:
                 st.markdown(f"**{pu}**")
                 dfmu = mdf[mdf['exploded_primary_use'] == pu]
@@ -821,6 +821,8 @@ def manufacturer_comparison_tab(tab, data):
                             metrics['Medicine_Count']
                             / metrics['Medicine_Count'].sum() * 100
                     ).round(2)
+                    metrics['Medicine_Count'] = metrics['Medicine_Count'].apply(scale_count)
+                    metrics['Unique_Patients'] = metrics['Unique_Patients'].apply(scale_count)
                     st.dataframe(
                         metrics
                         .sort_values('Medicine_Count', ascending=False)
@@ -905,8 +907,8 @@ def visualize_market_share_primary_use(tab, data: pd.DataFrame):
         with c1:
             st.plotly_chart(fig, use_container_width=True)
         with c2:
-            st.dataframe(market.applymap(scale_count))
-            st.metric("Total Rx Lines", scale_count(total))
+            market['Count'] = market['Count'].apply(scale_count)
+            st.dataframe(market)
 
 
 @log_time
