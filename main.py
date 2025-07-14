@@ -415,6 +415,7 @@ def visualize_geographical_distribution(tab, data: pd.DataFrame):
         ]
 
         for title, df_counts, limit, key in panels:
+            df_counts = df_counts.apply(scale_count)
             with st.expander(title):
                 c1, c2 = st.columns([3, 1])
                 with c1:
@@ -431,7 +432,7 @@ def visualize_geographical_distribution(tab, data: pd.DataFrame):
                     st.plotly_chart(fig, use_container_width=True, key=f"{key}_chart")
                 with c2:
                     st.dataframe(df_counts.reset_index(drop=True), key=f"{key}_table")
-                    st.metric("Total", scale_count(df_counts['count'].sum()))
+                    st.metric("Total", df_counts['count'].sum())
 
 
 @log_time
@@ -504,16 +505,14 @@ def visualize_medicines(tab, data: pd.DataFrame):
                 .reset_index(name='count')
                 .rename(columns={'value': 'Medicine'})
             )
+            top_med.apply(scale_count)
 
-            # Single scaling operation for display
-            display_data = top_med.head(10).copy()
-            display_data['count'] = display_data['count'].apply(scale_count)
 
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.plotly_chart(
                     px.bar(
-                        display_data,
+                        top_med.head(10),
                         x='count',
                         y='Medicine',
                         orientation='h',
@@ -525,7 +524,7 @@ def visualize_medicines(tab, data: pd.DataFrame):
                 )
             with col2:
                 st.dataframe(top_med, key="top_medicines_table")
-                st.metric("Total", scale_count(top_med['count'].sum()))
+                st.metric("Total", top_med['count'].sum())
 
         # Top by primary use - cached explosion
         with st.expander("Top Medicines by Primary Use"):
@@ -548,31 +547,28 @@ def visualize_medicines(tab, data: pd.DataFrame):
                     .reset_index(name='count')
                     .rename(columns={'value': 'Medicine'})
                 )
+                medicine_counts = medicine_counts.apply(scale_count)
 
                 if medicine_counts.empty:
                     st.info(f"No medicines found for {choice}.")
                     return
 
-                # Prepare display data
-                display_counts = medicine_counts.head(10).copy()
-                display_counts['count'] = display_counts['count'].apply(scale_count)
-
                 col1, col2 = st.columns([3, 1])
                 with col1:
                     st.plotly_chart(
                         px.bar(
-                            display_counts,
+                            medicine_counts.head(10),
                             x='count',
                             y='Medicine',
                             orientation='h',
-                            title=f"Top Medicines for {choice}",
+                            title=f"Top 10 Medicines for {choice}",
                             text='count'
                         ),
                         use_container_width=True,
                         key=f"medicines_by_use_{choice}_chart"
                     )
                 with col2:
-                    st.dataframe(display_counts, key=f"medicines_by_use_{choice}_table")
+                    st.dataframe(medicine_counts, key=f"medicines_by_use_{choice}_table")
                     st.metric("Total", scale_count(medicine_counts['count'].sum()))
 
 
@@ -853,106 +849,108 @@ def manufacturer_comparison_tab(tab, data):
     with tab:
         st.subheader("Manufacturer Comparison")
 
-        # 1) explode once
+        # Step 1: explode 'primary_use'
         exploded = _explode_primary_use(data)
 
-        # 2) present both selectors inside a form
+        # Clean the 'value' column for consistency
+        exploded['value'] = exploded['value'].astype(str).str.strip().str.lower()
+
+        # Step 2: Select filters inside a form
         with st.form("manufacturer_cmp"):
-            m_choices = sorted(data['manufacturers'].dropna().unique())
-            selected_manufacturers = st.multiselect(
-                "Select Manufacturer(s)", m_choices, key="mc_manufs"
-            )
+            manufacturer_options = sorted(data['manufacturers'].dropna().unique())
+            selected_manufacturers = st.multiselect("Select Manufacturer(s)", manufacturer_options, key="mc_manufs")
 
-            u_choices = sorted(exploded['exploded_primary_use'].unique())
-            selected_uses = st.multiselect(
-                "Select Primary Use(s)", u_choices, key="mc_uses"
-            )
+            use_options = sorted(exploded['exploded_primary_use'].dropna().unique())
+            selected_uses = st.multiselect("Select Primary Use(s)", use_options, key="mc_uses")
 
-            do_compare = st.form_submit_button("Compare")
+            submitted = st.form_submit_button("Compare")
 
-        # 3) if form not yet submitted, prompt and exit
-        if not do_compare:
-            st.info("Pick one or more manufacturers AND primary uses, then click **Compare**")
+        if not submitted:
+            st.info("Pick one or more manufacturers AND primary uses, then click Compare")
             return
 
-        # 4) filter exploded frame in one pass
-        subset = exploded.loc[
+        # Step 3: Filter data
+        filtered = exploded[
             exploded['manufacturers'].isin(selected_manufacturers) &
             exploded['exploded_primary_use'].isin(selected_uses)
-            ]
-        # 5) total meds per manufacturer
-        total_counts = (
-            subset
-            .groupby('manufacturers')['value']
+        ]
+
+        if filtered.empty:
+            st.warning("No data available for the selected filters.")
+            return
+
+        # Step 4: Total medicines per manufacturer (raw counts)
+        total_meds = (
+            filtered.groupby('manufacturers')['value']
             .count()
             .reset_index(name='Total Medicines')
+            .sort_values('Total Medicines', ascending=False)
         )
-        total_counts = total_counts.apply(scale_count)
-
-        fig = px.pie(
-            total_counts,
+        fig_total = px.pie(
+            total_meds,
             names='manufacturers',
             values='Total Medicines',
             hole=0.4,
             title="Total Medicines per Manufacturer"
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig_total, use_container_width=True)
 
-        # 6) one pie per selected primary use
-        pu_counts = (
-            subset
-            .groupby(['exploded_primary_use', 'manufacturers'])['value']
+        # Step 5: One pie per selected primary use (raw counts)
+        use_meds = (
+            filtered.groupby(['exploded_primary_use', 'manufacturers'])['value']
             .count()
-            .reset_index(name='Count')
+            .reset_index(name='Total Medicines')
         )
 
         cols = st.columns(2)
-        for i, pu in enumerate(selected_uses):
-            dfp = pu_counts[pu_counts['exploded_primary_use'] == pu].copy()
-            dfp['Count'] = dfp['Count'].apply(scale_count)
-            fig2 = px.pie(
-                dfp,
+        for i, use in enumerate(selected_uses):
+            df_use = use_meds[use_meds['exploded_primary_use'] == use]
+            if df_use.empty:
+                continue
+            fig_use = px.pie(
+                df_use,
                 names='manufacturers',
-                values='Count',
+                values='Total Medicines',
                 hole=0.4,
-                title=f"{pu}"
+                title=f"{use} – Total Medicines"
             )
             with cols[i % 2]:
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig_use, use_container_width=True)
 
-        # 7) detailed table per manufacturer × use
+        # Step 6: Detailed breakdown per manufacturer × use
         for m in selected_manufacturers:
             st.markdown(f"### {m}")
-            mdf = subset[subset['manufacturers'] == m]
-            for pu in selected_uses:
-                st.markdown(f"**{pu}**")
-                dfmu = mdf[mdf['exploded_primary_use'] == pu]
-                if dfmu.empty:
+            m_df = filtered[filtered['manufacturers'] == m]
+
+            for use in selected_uses:
+                st.markdown(f"**{use}**")
+                df_sub = m_df[m_df['exploded_primary_use'] == use]
+                if df_sub.empty:
                     st.write("No data")
-                else:
-                    metrics = (
-                        dfmu.groupby('value')
-                        .agg(
-                            Medicine_Count=('value', 'count'),
-                            Unique_Patients=('value', 'nunique')
-                        )
-                        .reset_index()
+                    continue
+
+                grouped = (
+                    df_sub.groupby('value')
+                    .agg(
+                        Count=('value', 'count'),
+                        Patients=('value', 'nunique')
                     )
-                    metrics['% Medicine Count'] = (
-                            metrics['Medicine_Count']
-                            / metrics['Medicine_Count'].sum() * 100
-                    ).round(2)
-                    metrics['Medicine_Count'] = metrics['Medicine_Count'].apply(scale_count)
-                    metrics['Unique_Patients'] = metrics['Unique_Patients'].apply(scale_count)
-                    st.dataframe(
-                        metrics
-                        .sort_values('Medicine_Count', ascending=False)
-                        .rename(columns={
-                            'value': 'Medicine',
-                            'Medicine_Count': 'Count',
-                            'Unique_Patients': 'Patients'
-                        })
-                    )
+                    .reset_index()
+                )
+                total = grouped['Count'].sum()
+                grouped['% Count'] = (grouped['Count'] / total * 100).round(2)
+
+                # Display counts as-is (or apply your scale_count if you prefer)
+                grouped['Count'] = grouped['Count'].apply(scale_count)
+                grouped['Patients'] = grouped['Patients'].apply(scale_count)
+
+                st.dataframe(
+                    grouped.sort_values(by='Count', ascending=False).rename(columns={
+                        'value': 'Medicine'
+                    }),
+                    use_container_width=True
+                )
+
 
 
 @log_time
@@ -1004,6 +1002,7 @@ def visualize_market_share_primary_use(tab, data: pd.DataFrame):
             .agg(Count=('value', 'count'))
             .reset_index()
         )
+        market = market.apply(scale_count)
         total = market['Count'].sum()
         market['Share%'] = (market['Count'] / total * 100).round(2)
         market = market.sort_values('Share%', ascending=False).reset_index(drop=True)
@@ -1012,13 +1011,9 @@ def visualize_market_share_primary_use(tab, data: pd.DataFrame):
         if market.empty:
             st.warning("No data available for the selected primary uses.")
             return
-
         # 6) pie + table
-        market_scaled = market.copy()
-        if 'Count' in market_scaled.columns:
-            market_scaled['Count'] = market_scaled['Count'].apply(scale_count)
         fig = px.pie(
-            market_scaled.head(20),
+            market.head(20),
             names='manufacturers',
             values='Share%',
             hole=0.4,
@@ -1028,7 +1023,6 @@ def visualize_market_share_primary_use(tab, data: pd.DataFrame):
         with c1:
             st.plotly_chart(fig, use_container_width=True)
         with c2:
-            market['Count'] = market['Count'].apply(scale_count)
             st.dataframe(market)
 
 
@@ -1050,6 +1044,7 @@ def visualize_value_comparison(tab, data):
             )
             .reset_index()
         )
+        manufacturer_comparison = manufacturer_comparison.apply(scale_count)
 
         # Get top 20 for charts
         top_20 = manufacturer_comparison.sort_values(by='Total_Value', ascending=False).head(20)
@@ -1064,7 +1059,6 @@ def visualize_value_comparison(tab, data):
         # Display the selected metric as a bar chart
         if toggle_option == 'Total Value':
             top_20_scaled = top_20.copy()
-            top_20_scaled['Total_Value'] = top_20_scaled['Total_Value'].apply(scale_count)
             fig = px.bar(
                 top_20_scaled,
                 x='manufacturers',
@@ -1079,7 +1073,6 @@ def visualize_value_comparison(tab, data):
         elif toggle_option == 'Average Value':
             top_20 = manufacturer_comparison.sort_values(by='Average_Value', ascending=False).head(20)
             top_20_scaled = top_20.copy()
-            top_20_scaled['Average_Value'] = top_20_scaled['Average_Value'].apply(scale_count)
             fig = px.bar(
                 top_20_scaled,
                 x='manufacturers',
@@ -1093,7 +1086,6 @@ def visualize_value_comparison(tab, data):
         elif toggle_option == 'Patient Count':
             top_20 = manufacturer_comparison.sort_values(by='Patient_Count', ascending=False).head(20)
             top_20_scaled = top_20.copy()
-            top_20_scaled['Patient_Count'] = top_20_scaled['Patient_Count'].apply(scale_count)
             fig = px.bar(
                 top_20_scaled,
                 x='manufacturers',
@@ -1106,9 +1098,6 @@ def visualize_value_comparison(tab, data):
 
         # Display the data as a table
         scaled_df = manufacturer_comparison.copy()
-        for col in ['Total_Value', 'Average_Value', 'Patient_Count']:
-            if col in scaled_df.columns:
-                scaled_df[col] = scaled_df[col].apply(scale_count)
         scaled_df = scaled_df.sort_values(by='Total_Value', ascending=False).reset_index(drop=True)
         scaled_df['Total_Value_Percentage'] = (scaled_df['Total_Value'] / scaled_df['Total_Value'].sum() * 100).round(2)
         scaled_df['Patient_Count_Percentage'] = (
