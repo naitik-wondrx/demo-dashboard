@@ -524,7 +524,7 @@ def visualize_medicines(tab, data: pd.DataFrame):
                     key="top_medicines_chart"
                 )
             with col2:
-                st.dataframe(display_data, key="top_medicines_table")
+                st.dataframe(top_med, key="top_medicines_table")
                 st.metric("Total", scale_count(top_med['count'].sum()))
 
         # Top by primary use - cached explosion
