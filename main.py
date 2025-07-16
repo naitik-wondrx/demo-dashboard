@@ -296,34 +296,31 @@ def visualize_data_types(tab, data):
         with st.expander("Distribution of Data Types within Rx"):
             type_counts = data['type'].str.capitalize().value_counts().reset_index()
             type_counts.columns = ['Type', 'Count']
+            type_counts_scaled = type_counts.copy()
+            type_counts_scaled['Count'] = type_counts_scaled['Count'].apply(scale_count)
 
             col1, col2 = st.columns([3, 1])
             with col1:
-                type_counts_scaled = type_counts.copy()
-                type_counts_scaled['Count'] = type_counts_scaled['Count'].apply(scale_count)
                 st.plotly_chart(create_pie_chart(type_counts_scaled, 'Type', 'Count'))
             with col2:
-                type_counts_scaled = type_counts.copy()
-                type_counts_scaled['Count'] = type_counts_scaled['Count'].apply(scale_count)
                 st.dataframe(type_counts_scaled)
-                total = type_counts['Count'].sum()
-                st.metric("Total", scale_count(total))
+                total = type_counts_scaled['Count'].sum()
+                st.metric("Total", total)
         with st.expander("Distribution of Speciality Doctors"):
             speciality_counts = data.groupby('speciality')['doctor_id'].nunique().reset_index()
             speciality_counts.columns = ['Speciality', 'Count']
+            speciality_counts_scaled = speciality_counts.copy()
+            speciality_counts_scaled['Count'] = speciality_counts_scaled['Count'].apply(scale_count)
+            speciality_counts_scaled = speciality_counts_scaled.sort_values(by='Count', ascending=False).reset_index(
+                drop=True)
 
             col1, col2 = st.columns([2, 1])
             with col1:
-                speciality_counts_scaled = speciality_counts.copy()
-                speciality_counts_scaled['Count'] = speciality_counts_scaled['Count'].apply(scale_count)
                 st.plotly_chart(create_pie_chart(speciality_counts_scaled, 'Speciality', 'Count'))
             with col2:
-                speciality_counts_scaled = speciality_counts.sort_values(by='Count', ascending=False).reset_index(
-                    drop=True)
-                st.dataframe(speciality_counts.sort_values(by='Count', ascending=False).reset_index(drop=True).apply(
-                    scale_count))
-                total = speciality_counts['Count'].sum()
-                st.metric("Total", scale_count(total))
+                st.dataframe(speciality_counts_scaled)
+                total = speciality_counts_scaled['Count'].sum()
+                st.metric("Total", total)
 
 
 @log_time
@@ -373,28 +370,24 @@ def _prepare_geo_aggregations(data: pd.DataFrame) -> tuple:
         state_df.groupby('state_name')['id']
         .nunique()
         .reset_index(name='count')
-        .sort_values('count', ascending=False)
     )
 
     doctor_state = (
         state_df.groupby('state_name')['doctor_id']
         .nunique()
         .reset_index(name='count')
-        .sort_values('count', ascending=False)
     )
 
     patient_city = (
         city_df.groupby('city')['id']
         .nunique()
         .reset_index(name='count')
-        .sort_values('count', ascending=False)
     )
 
     doctor_city = (
         city_df.groupby('city')['doctor_id']
         .nunique()
         .reset_index(name='count')
-        .sort_values('count', ascending=False)
     )
 
     return patient_state, doctor_state, patient_city, doctor_city
@@ -409,12 +402,13 @@ def visualize_geographical_distribution(tab, data: pd.DataFrame):
 
         panels = [
             ("Patient Distribution by State", patient_state, 15, "patient_state"),
-            ("Patient Distribution by City", patient_city, 25, "patient_city"),
+            ("Patient Distribution by City", patient_city, 15, "patient_city"),
             ("Doctor Distribution by State", doctor_state, 15, "doctor_state"),
-            ("Doctor Distribution by City", doctor_city, 25, "doctor_city"),
+            ("Doctor Distribution by City", doctor_city, 15, "doctor_city"),
         ]
 
         for title, df_counts, limit, key in panels:
+            df_counts.sort_values(by="count", inplace=True, ascending=False)
             df_counts = df_counts.apply(scale_count)
             with st.expander(title):
                 c1, c2 = st.columns([3, 1])
@@ -427,7 +421,10 @@ def visualize_geographical_distribution(tab, data: pd.DataFrame):
                         orientation='h',
                         title=title,
                         text='count',
-                        color='count'
+                        color='count',
+                    )
+                    fig.update_layout(
+                        yaxis=dict(autorange="reversed")
                     )
                     st.plotly_chart(fig, use_container_width=True, key=f"{key}_chart")
                 with c2:
@@ -441,15 +438,15 @@ def visualize_patient_demographics(tab, data):
         data = data.drop_duplicates(subset=['id'])
         age_group_counts, gender_counts = prepare_demographics(data)
         age_group_counts = age_group_counts.sort_values('age_group')
+        age_group_counts = age_group_counts.apply(scale_count)
+        gender_counts = gender_counts.apply(scale_count)
 
         with st.expander("Age Group Distribution of Patients"):
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.plotly_chart(create_pie_chart(age_group_counts, 'age_group', 'count'))
             with col2:
-                st.dataframe(
-                    age_group_counts.sort_values(by='age_group', ascending=True).reset_index(drop=True).apply(
-                        scale_count))
+                st.dataframe(age_group_counts,hide_index=True)
                 total = age_group_counts['count'].sum()
                 st.metric("Total", total)
 
@@ -459,7 +456,7 @@ def visualize_patient_demographics(tab, data):
                 st.plotly_chart(create_pie_chart(gender_counts, 'gender', 'count',
                                                  color_map={'FEMALE': '#FF69B4', 'MALE': '#0F52BA'}))
             with col2:
-                st.dataframe(gender_counts.apply(scale_count))
+                st.dataframe(gender_counts,hide_index=True)
                 total = gender_counts['count'].sum()
                 st.metric("Total", total)
 
@@ -829,8 +826,8 @@ def visualize_manufacturer_medicines(tab, data):
                         )
 
                     with col2:
-                        st.dataframe(medicine_counts.apply(scale_count))
-                        total = scale_count(medicine_counts['Count'].sum())
+                        st.dataframe(medicine_counts_scaled)
+                        total = medicine_counts_scaled['Count'].sum()
                         col3, col4 = st.columns([1, 1])
                         with col3:
                             st.metric("Total", total)
@@ -1621,6 +1618,7 @@ def main():
     path = 'data/demo_data.csv'
     data = load_data(path)
     state_city_pincode_mapping = load_state_city_pincode_map()
+    data['value'] = data['value'].str.strip()
     cleaned_data = data
     st.sidebar.title("Rx Analytics Filters")
 
