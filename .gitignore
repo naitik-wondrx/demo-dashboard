@@ -90,7 +90,7 @@ cython_debug/
 
 # Environment files
 .env
-.venv
+.venv/
 env/
 venv/
 ENV/
