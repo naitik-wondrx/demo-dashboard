@@ -16,7 +16,17 @@ import pandas as pd
 import plotly.express as px
 from streamlit import session_state as state
 
-SCALE_FACTOR = 2
+# Store original dataframe function and create helper to start index from 1
+ORIG_DATAFRAME = st.dataframe
+
+def show_df_from_1(df, **kwargs):
+    """Helper function to display dataframe with index starting from 1 instead of 0"""
+    df2 = df.copy()
+    df2.reset_index(drop=True, inplace=True)
+    df2.index = df2.index + 1
+    ORIG_DATAFRAME(df2, **kwargs)
+
+SCALE_FACTOR = 26
 
 
 def scale_count(x):
@@ -296,34 +306,31 @@ def visualize_data_types(tab, data):
         with st.expander("Distribution of Data Types within Rx"):
             type_counts = data['type'].str.capitalize().value_counts().reset_index()
             type_counts.columns = ['Type', 'Count']
+            type_counts_scaled = type_counts.copy()
+            type_counts_scaled['Count'] = type_counts_scaled['Count'].apply(scale_count)
 
             col1, col2 = st.columns([3, 1])
             with col1:
-                type_counts_scaled = type_counts.copy()
-                type_counts_scaled['Count'] = type_counts_scaled['Count'].apply(scale_count)
                 st.plotly_chart(create_pie_chart(type_counts_scaled, 'Type', 'Count'))
             with col2:
-                type_counts_scaled = type_counts.copy()
-                type_counts_scaled['Count'] = type_counts_scaled['Count'].apply(scale_count)
-                st.dataframe(type_counts_scaled)
-                total = type_counts['Count'].sum()
-                st.metric("Total", scale_count(total))
+                show_df_from_1(type_counts_scaled)
+                total = type_counts_scaled['Count'].sum()
+                st.metric("Total", total)
         with st.expander("Distribution of Speciality Doctors"):
             speciality_counts = data.groupby('speciality')['doctor_id'].nunique().reset_index()
             speciality_counts.columns = ['Speciality', 'Count']
+            speciality_counts_scaled = speciality_counts.copy()
+            speciality_counts_scaled['Count'] = speciality_counts_scaled['Count'].apply(scale_count)
+            speciality_counts_scaled = speciality_counts_scaled.sort_values(by='Count', ascending=False).reset_index(
+                drop=True)
 
             col1, col2 = st.columns([2, 1])
             with col1:
-                speciality_counts_scaled = speciality_counts.copy()
-                speciality_counts_scaled['Count'] = speciality_counts_scaled['Count'].apply(scale_count)
                 st.plotly_chart(create_pie_chart(speciality_counts_scaled, 'Speciality', 'Count'))
             with col2:
-                speciality_counts_scaled = speciality_counts.sort_values(by='Count', ascending=False).reset_index(
-                    drop=True)
-                st.dataframe(speciality_counts.sort_values(by='Count', ascending=False).reset_index(drop=True).apply(
-                    scale_count))
-                total = speciality_counts['Count'].sum()
-                st.metric("Total", scale_count(total))
+                show_df_from_1(speciality_counts_scaled)
+                total = speciality_counts_scaled['Count'].sum()
+                st.metric("Total", total)
 
 
 @log_time
@@ -373,28 +380,24 @@ def _prepare_geo_aggregations(data: pd.DataFrame) -> tuple:
         state_df.groupby('state_name')['id']
         .nunique()
         .reset_index(name='count')
-        .sort_values('count', ascending=False)
     )
 
     doctor_state = (
         state_df.groupby('state_name')['doctor_id']
         .nunique()
         .reset_index(name='count')
-        .sort_values('count', ascending=False)
     )
 
     patient_city = (
         city_df.groupby('city')['id']
         .nunique()
         .reset_index(name='count')
-        .sort_values('count', ascending=False)
     )
 
     doctor_city = (
         city_df.groupby('city')['doctor_id']
         .nunique()
         .reset_index(name='count')
-        .sort_values('count', ascending=False)
     )
 
     return patient_state, doctor_state, patient_city, doctor_city
@@ -409,12 +412,13 @@ def visualize_geographical_distribution(tab, data: pd.DataFrame):
 
         panels = [
             ("Patient Distribution by State", patient_state, 15, "patient_state"),
-            ("Patient Distribution by City", patient_city, 25, "patient_city"),
+            ("Patient Distribution by City", patient_city, 15, "patient_city"),
             ("Doctor Distribution by State", doctor_state, 15, "doctor_state"),
-            ("Doctor Distribution by City", doctor_city, 25, "doctor_city"),
+            ("Doctor Distribution by City", doctor_city, 15, "doctor_city"),
         ]
 
         for title, df_counts, limit, key in panels:
+            df_counts.sort_values(by="count", inplace=True, ascending=False)
             df_counts = df_counts.apply(scale_count)
             with st.expander(title):
                 c1, c2 = st.columns([3, 1])
@@ -427,11 +431,11 @@ def visualize_geographical_distribution(tab, data: pd.DataFrame):
                         orientation='h',
                         title=title,
                         text='count',
-                        color='count'
+                        color='count',
                     )
                     st.plotly_chart(fig, use_container_width=True, key=f"{key}_chart")
                 with c2:
-                    st.dataframe(df_counts.reset_index(drop=True), key=f"{key}_table")
+                    show_df_from_1(df_counts.reset_index(drop=True), key=f"{key}_table")
                     st.metric("Total", df_counts['count'].sum())
 
 
@@ -441,15 +445,15 @@ def visualize_patient_demographics(tab, data):
         data = data.drop_duplicates(subset=['id'])
         age_group_counts, gender_counts = prepare_demographics(data)
         age_group_counts = age_group_counts.sort_values('age_group')
+        age_group_counts = age_group_counts.apply(scale_count)
+        gender_counts = gender_counts.apply(scale_count)
 
         with st.expander("Age Group Distribution of Patients"):
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.plotly_chart(create_pie_chart(age_group_counts, 'age_group', 'count'))
             with col2:
-                st.dataframe(
-                    age_group_counts.sort_values(by='age_group', ascending=True).reset_index(drop=True).apply(
-                        scale_count))
+                show_df_from_1(age_group_counts,hide_index=True)
                 total = age_group_counts['count'].sum()
                 st.metric("Total", total)
 
@@ -459,7 +463,7 @@ def visualize_patient_demographics(tab, data):
                 st.plotly_chart(create_pie_chart(gender_counts, 'gender', 'count',
                                                  color_map={'FEMALE': '#FF69B4', 'MALE': '#0F52BA'}))
             with col2:
-                st.dataframe(gender_counts.apply(scale_count))
+                show_df_from_1(gender_counts,hide_index=True)
                 total = gender_counts['count'].sum()
                 st.metric("Total", total)
 
@@ -497,34 +501,30 @@ def visualize_medicines(tab, data: pd.DataFrame):
         return
 
     with tab:
-        # Top Medicines overall - direct aggregation
         with st.expander("Top Medicines"):
-            top_med = (
+            medicines = (
                 med['value']
-                .value_counts()
+                .value_counts(sort=True)
                 .reset_index(name='count')
                 .rename(columns={'value': 'Medicine'})
             )
-            top_med.apply(scale_count)
+            medicines.apply(scale_count)
 
 
-            col1, col2 = st.columns([3, 1])
+            col1, col2 = st.columns([0.7, 0.3])
             with col1:
                 st.plotly_chart(
                     px.bar(
-                        top_med.head(10),
+                        medicines.head(10),
                         x='count',
                         y='Medicine',
                         orientation='h',
                         title="Top 10 Medicines",
                         text='count'
-                    ),
-                    use_container_width=True,
-                    key="top_medicines_chart"
-                )
+                    ),use_container_width=True,key="top_medicines_chart")
             with col2:
-                st.dataframe(top_med, key="top_medicines_table")
-                st.metric("Total", top_med['count'].sum())
+                show_df_from_1(medicines, key="top_medicines_table")
+                st.metric("Total", medicines['count'].sum())
 
         # Top by primary use - cached explosion
         with st.expander("Top Medicines by Primary Use"):
@@ -568,7 +568,7 @@ def visualize_medicines(tab, data: pd.DataFrame):
                         key=f"medicines_by_use_{choice}_chart"
                     )
                 with col2:
-                    st.dataframe(medicine_counts, key=f"medicines_by_use_{choice}_table")
+                    show_df_from_1(medicine_counts, key=f"medicines_by_use_{choice}_table")
                     st.metric("Total", scale_count(medicine_counts['count'].sum()))
 
 
@@ -587,7 +587,7 @@ def visualize_pharma_analytics(tab, filtered_medical_data):
                         top_15_manufacturers_scaled['count'] = top_15_manufacturers_scaled['count'].apply(scale_count)
                     st.plotly_chart(create_pie_chart(top_15_manufacturers_scaled.head(15), 'manufacturers', 'count'))
                 with col2:
-                    st.dataframe(top_15_manufacturers.apply(scale_count))
+                    show_df_from_1(top_15_manufacturers.apply(scale_count))
                     total = scale_count(top_15_manufacturers['count'].sum())
                     st.metric("Total", total)
             else:
@@ -605,7 +605,7 @@ def visualize_pharma_analytics(tab, filtered_medical_data):
                         create_bar_chart(top_15_primary_uses_scaled.head(15), 'count', 'primary_use', orientation='h',
                                          text='count', color='count'))
                 with col2:
-                    st.dataframe(top_15_primary_uses.apply(scale_count))
+                    show_df_from_1(top_15_primary_uses.apply(scale_count))
                     total = scale_count(top_15_primary_uses['count'].sum())
                     st.metric("Total", total)
             else:
@@ -647,7 +647,7 @@ def visualize_observations(tab, data):  # Pre-filter and clean data once
                     )
                 )
             with col2:
-                st.dataframe(top_obs_scaled)
+                show_df_from_1(top_obs_scaled)
                 st.metric("Total", scale_count(top_obs['count'].sum()))
 
         # Observations by Gender - single aggregation
@@ -690,7 +690,7 @@ def visualize_observations(tab, data):  # Pre-filter and clean data once
                     )
                 )
             with col2:
-                st.dataframe(obs_pivot.apply(scale_count))
+                show_df_from_1(obs_pivot.apply(scale_count))
 
 
 @log_time
@@ -737,7 +737,7 @@ def visualize_diagnostics(tab, data):
                     key="top_diagnostics_chart"
                 )
             with col2:
-                st.dataframe(top_diagnostics_scaled, key="top_diagnostics_table")
+                show_df_from_1(top_diagnostics_scaled, key="top_diagnostics_table")
                 st.metric("Total", scale_count(top_diagnostics['count'].sum()))
 
         # Diagnostics by Gender - single aggregation and pivot
@@ -782,7 +782,7 @@ def visualize_diagnostics(tab, data):
                     key="diagnostics_by_gender_chart"
                 )
             with col2:
-                st.dataframe(diagnostics_pivot.apply(scale_count), key="diagnostics_by_gender_table")
+                show_df_from_1(diagnostics_pivot.apply(scale_count), key="diagnostics_by_gender_table")
 
 
 @log_time
@@ -795,7 +795,7 @@ def visualize_manufacturer_medicines(tab, data):
             # Sort the manufacturers list alphabetically
             top_manufacturers_list = sorted(top_15_manufacturers['manufacturers'].tolist())
             default_index = top_manufacturers_list.index(
-                "ZYDUS CADILA") if "ZYDUS CADILA" in top_manufacturers_list else 0
+                "ABBOTT") if "ABBOTT" in top_manufacturers_list else 0
 
             # Display manufacturer selection box
             selected_manufacturer = st.selectbox(
@@ -829,8 +829,8 @@ def visualize_manufacturer_medicines(tab, data):
                         )
 
                     with col2:
-                        st.dataframe(medicine_counts.apply(scale_count))
-                        total = scale_count(medicine_counts['Count'].sum())
+                        show_df_from_1(medicine_counts_scaled)
+                        total = medicine_counts_scaled['Count'].sum()
                         col3, col4 = st.columns([1, 1])
                         with col3:
                             st.metric("Total", total)
@@ -944,13 +944,12 @@ def manufacturer_comparison_tab(tab, data):
                 grouped['Count'] = grouped['Count'].apply(scale_count)
                 grouped['Patients'] = grouped['Patients'].apply(scale_count)
 
-                st.dataframe(
+                show_df_from_1(
                     grouped.sort_values(by='Count', ascending=False).rename(columns={
                         'value': 'Medicine'
                     }),
                     use_container_width=True
                 )
-
 
 
 @log_time
@@ -1023,7 +1022,7 @@ def visualize_market_share_primary_use(tab, data: pd.DataFrame):
         with c1:
             st.plotly_chart(fig, use_container_width=True)
         with c2:
-            st.dataframe(market)
+            show_df_from_1(market)
 
 
 @log_time
@@ -1102,7 +1101,7 @@ def visualize_value_comparison(tab, data):
         scaled_df['Total_Value_Percentage'] = (scaled_df['Total_Value'] / scaled_df['Total_Value'].sum() * 100).round(2)
         scaled_df['Patient_Count_Percentage'] = (
                 scaled_df['Patient_Count'] / scaled_df['Patient_Count'].sum() * 100).round(2)
-        st.dataframe(scaled_df)
+        show_df_from_1(scaled_df)
 
 
 @log_time
@@ -1201,7 +1200,7 @@ def visualize_vitals(tab, data):
                     ]
                 })
                 st.write("Summary Statistics:")
-                st.dataframe(overall_summary.apply(scale_count))
+                show_df_from_1(overall_summary.apply(scale_count))
 
                 fig_overall = px.box(
                     vital_data.melt(id_vars=['gender', 'age_group'], value_vars=['systolic', 'diastolic'],
@@ -1221,7 +1220,7 @@ def visualize_vitals(tab, data):
                 }).round(2)
 
                 st.write("Gender-wise Summary Statistics:")
-                st.dataframe(gender_summary.apply(scale_count))
+                show_df_from_1(gender_summary.apply(scale_count))
 
                 fig_gender = px.box(
                     vital_data.melt(id_vars=['gender'],
@@ -1245,7 +1244,7 @@ def visualize_vitals(tab, data):
                 }).round(1)
                 age_summary = pd.DataFrame(age_summary).sort_values(by='age_group').reset_index()
                 st.write("Age-wise Summary Statistics:")
-                st.dataframe(age_summary.apply(scale_count))
+                show_df_from_1(age_summary.apply(scale_count))
 
                 fig_age = px.box(
                     vital_data.melt(id_vars=['age_group'],
@@ -1287,7 +1286,7 @@ def visualize_vitals(tab, data):
                     ]
                 })
                 st.write("Summary Statistics:")
-                st.dataframe(overall_summary.apply(scale_count))
+                show_df_from_1(overall_summary.apply(scale_count))
 
                 fig_pulse = px.box(
                     vital_data,
@@ -1303,7 +1302,7 @@ def visualize_vitals(tab, data):
                     'value': ['count', 'mean', 'median', 'std', 'min', 'max']
                 }).round(2)
                 st.write("Gender-wise Summary Statistics:")
-                st.dataframe(gender_summary.apply(scale_count))
+                show_df_from_1(gender_summary.apply(scale_count))
 
                 fig_pulse_gender = px.box(
                     vital_data,
@@ -1323,7 +1322,7 @@ def visualize_vitals(tab, data):
                 }).round(1)
                 age_summary = pd.DataFrame(age_summary).reset_index()
                 st.write("Age-wise Summary Statistics:")
-                st.dataframe(age_summary.apply(scale_count))
+                show_df_from_1(age_summary.apply(scale_count))
 
                 fig_pulse_age = px.box(
                     vital_data,
@@ -1356,7 +1355,7 @@ def visualize_vitals(tab, data):
                 }).round(2).rename(columns={'value': 'Weight (kg)'}).reset_index().rename(columns={'index': 'Metric'})
 
                 st.write("Summary Statistics:")
-                st.dataframe(overall_summary.apply(scale_count))
+                show_df_from_1(overall_summary.apply(scale_count))
 
                 fig_weight = px.box(
                     vital_data,
@@ -1373,7 +1372,7 @@ def visualize_vitals(tab, data):
                 }).round(2).rename(columns={'value': 'Weight (kg)'})
 
                 st.write("Gender-wise Summary Statistics:")
-                st.dataframe(gender_summary.apply(scale_count))
+                show_df_from_1(gender_summary.apply(scale_count))
 
                 fig_weight_gender = px.box(
                     vital_data,
@@ -1393,7 +1392,7 @@ def visualize_vitals(tab, data):
                 }).round(2).rename(columns={'value': 'Weight (kg)'})
                 age_summary = pd.DataFrame(age_summary).reset_index()
                 st.write("Age-wise Summary Statistics:")
-                st.dataframe(age_summary.apply(scale_count))
+                show_df_from_1(age_summary.apply(scale_count))
 
                 fig_weight_age = px.box(
                     vital_data,
@@ -1446,7 +1445,7 @@ def visualize_vitals(tab, data):
                     ]
                 })
                 st.write("Summary Statistics:")
-                st.dataframe(overall_summary.apply(scale_count))
+                show_df_from_1(overall_summary.apply(scale_count))
 
                 fig_spo2 = px.box(
                     vital_data,
@@ -1463,7 +1462,7 @@ def visualize_vitals(tab, data):
                 }).round(2)
 
                 st.write("Gender-wise Summary Statistics:")
-                st.dataframe(gender_summary.apply(scale_count))
+                show_df_from_1(gender_summary.apply(scale_count))
 
                 fig_spo2_gender = px.box(
                     vital_data,
@@ -1483,7 +1482,7 @@ def visualize_vitals(tab, data):
                 }).round(1)
                 age_summary = pd.DataFrame(age_summary).reset_index()
                 st.write("Age-wise Summary Statistics:")
-                st.dataframe(age_summary.apply(scale_count))
+                show_df_from_1(age_summary.apply(scale_count))
 
                 fig_spo2_age = px.box(
                     vital_data,
@@ -1621,6 +1620,7 @@ def main():
     path = 'data/demo_data.csv'
     data = load_data(path)
     state_city_pincode_mapping = load_state_city_pincode_map()
+    data['value'] = data['value'].str.strip()
     cleaned_data = data
     st.sidebar.title("Rx Analytics Filters")
 
@@ -1698,33 +1698,33 @@ def main():
 
     # Visualization Tabs
     tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12 = st.tabs([
-        "🏷️ Manufacturer Analysis",
-        "📂 Data Types within Rx",
-        "📍 Geographical Distribution",
-        "📊 Demographic Distribution",
-        "💊 Medicines",
         "🏭 Pharma Analytics",
+        "💰 Value-Based Comparison",
+        "🏷️ Manufacturer Analysis",
+        "🏭 Market Share by primary use",
+        "🔍 Manufacturer Comparison",
+        "💊 Medicines",
         "🩺 Observations",
         "🧪 Diagnostics",
-        "🔍 Manufacturer Comparison",
-        "💰 Value-Based Comparison",
-        "🏭 Market Share by primary use",
+        "📍 Geographical Distribution",
+        "📊 Demographic Distribution",
+        "📂 Data Types within Rx",
         "🩸 Vitals"
     ])
     display_sidebar_totals(filtered_medical_data)
 
     # Visualizations for each tab
-    visualize_manufacturer_medicines(tab1, filtered_medical_data)
-    visualize_data_types(tab2, filtered_medical_data)
-    visualize_geographical_distribution(tab3, filtered_medical_data)
-    visualize_patient_demographics(tab4, filtered_medical_data)
-    visualize_medicines(tab5, filtered_medical_data)
-    visualize_pharma_analytics(tab6, filtered_medical_data)
+    visualize_pharma_analytics(tab1, filtered_medical_data)
+    visualize_value_comparison(tab2, filtered_medical_data)
+    visualize_manufacturer_medicines(tab3, filtered_medical_data)
+    visualize_market_share_primary_use(tab4, filtered_medical_data)
+    manufacturer_comparison_tab(tab5, filtered_medical_data)
+    visualize_medicines(tab6, filtered_medical_data)
     visualize_observations(tab7, filtered_medical_data)
     visualize_diagnostics(tab8, filtered_medical_data)
-    manufacturer_comparison_tab(tab9, filtered_medical_data)
-    visualize_value_comparison(tab10, filtered_medical_data)
-    visualize_market_share_primary_use(tab11, filtered_medical_data)
+    visualize_geographical_distribution(tab9, filtered_medical_data)
+    visualize_patient_demographics(tab10, filtered_medical_data)
+    visualize_data_types(tab11, filtered_medical_data)
     visualize_vitals(tab12, filtered_medical_data)
 
 
